@@ -6,13 +6,13 @@
 
 **Eine eigene Blockliste für Kleinanzeigen.de: Anzeigen von Anbietern, die du blockierst, verschwinden aus deinen Suchergebnissen.**
 
-[![Version](https://img.shields.io/badge/version-0.2.0-blue?style=flat-square)](https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue?style=flat-square)](https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js)
 [![Plattform](https://img.shields.io/badge/plattform-Kleinanzeigen.de-green?style=flat-square)](https://www.kleinanzeigen.de)
 [![Userscript](https://img.shields.io/badge/Tampermonkey-Violentmonkey-black?style=flat-square&logo=tampermonkey)](#%EF%B8%8F-installation)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20RainbowlabsInc-FF5E5B?style=flat-square&logo=ko-fi&logoColor=white)](https://ko-fi.com/rainbowlabsinc)
 
-*Chrome · Firefox · Edge · Kein Server · Kein Tracking · Listen teilen und zusammenführen*
+*Chrome · Firefox · Edge · Kein eigener Server · Kein Tracking · Listen teilen, zusammenführen und abonnieren*
 
 </div>
 
@@ -20,7 +20,7 @@
 
 Manche Anbieter tauchen in jeder Suche wieder auf: mit Lockpreisen wie **„2 € VB“**, mit „nur Tausch“-Anzeigen oder mit Dutzenden fast gleichen Inseraten. Kleinanzeigen bietet keine Möglichkeit, diese Anbieter in der Suche auszublenden.
 
-**Dieses Userscript ergänzt eine Blockliste.** Neben dem Preis jeder Anzeige sitzt ein Button „Ausblenden“. Damit blockierst du den Anbieter oder blendest nur diese eine Anzeige aus. Alle Anzeigen blockierter Anbieter werden danach eingeklappt oder verschwinden ganz. Die Liste lässt sich exportieren und weitergeben. Fremde Listen führst du nach einer Vorschau mit deiner eigenen zusammen, ähnlich wie Filterlisten gegen Werbung.
+**Dieses Userscript ergänzt eine Blockliste.** Neben dem Preis jeder Anzeige sitzt ein Button „Ausblenden“. Damit blockierst du den Anbieter oder blendest nur diese eine Anzeige aus. Alle Anzeigen blockierter Anbieter werden danach eingeklappt oder verschwinden ganz. Die Liste lässt sich exportieren und weitergeben. Fremde Listen führst du nach einer Vorschau mit deiner eigenen zusammen oder abonnierst sie, dann aktualisieren sie sich täglich selbst, ähnlich wie Filterlisten gegen Werbung.
 
 <p align="center">
   <img src="assets/vorschau-menue.png" alt="Menü am Button Ausblenden: Anbieter erkannt, Name und Notiz, Button Anbieter blockieren" width="480">
@@ -43,6 +43,7 @@ Manche Anbieter tauchen in jeder Suche wieder auf: mit Lockpreisen wie **„2 �
 * 📒 **Verwaltung:** Über den Button „Blockliste“ unten links (oder das Tampermonkey-Menü) siehst du alle blockierten Anbieter mit Notiz, Datum und Zahl der bekannten Anzeigen. Du kannst auch eine Nutzer-ID oder einen Link zum Anbieter (Bestandsliste oder Shop) direkt eintragen.
 * 💾 **Export:** als JSON-Datei, als Textliste oder über die Zwischenablage.
 * 🔀 **Listen zusammenführen:** Eine fremde (oder eigene) Liste als Datei wählen oder einfügen. Eine Vorschau zeigt, welche Anbieter neu sind und welche du schon hast; einzelne lassen sich abwählen. Übernommene Einträge merken sich ihre **Herkunft**, und mit „Alle freigeben“ entfernst du eine übernommene Liste wieder, ohne deine eigenen Einträge anzutasten.
+* 📡 **Listen abonnieren:** Eine Liste unter einer festen Adresse (z. B. eine Datei in einem GitHub-Repo) wird einmal täglich neu geladen. Neue Anbieter kommen dazu, entfernte fallen weg. Gibst du einen Anbieter aus einem Abo frei, bleibt er freigegeben.
 * 🔄 **Mehrere Tabs:** Änderungen gelten sofort auch in anderen offenen Kleinanzeigen-Tabs.
 * 🔒 **Strikt begrenzt:** läuft nur auf `https://www.kleinanzeigen.de` und dort nur auf Seiten unter `/s-…` (Suche, Anzeigen, Bestandslisten).
 
@@ -70,7 +71,7 @@ Manche Anbieter tauchen in jeder Suche wieder auf: mit Lockpreisen wie **„2 �
 
 *(Alternativ: Inhalt von `script.user.js` kopieren und in Tampermonkey als neues Skript einfügen.)*
 
-Updates holt sich Tampermonkey automatisch aus diesem Repo. Das Script verträgt sich mit [Kleinanzeigen – Anzeige melden](https://github.com/RainbowLabsInc/Kleinanzeigen.de_Anzeige_melden): Beide Buttons stehen dann nebeneinander in der Preiszeile.
+Updates holt sich Tampermonkey automatisch aus diesem Repo. Seit Version 0.3.0 darf das Script Listen von anderen Adressen laden (`GM_xmlhttpRequest`, für abonnierte Listen). Tampermonkey zeigt deshalb beim Update die neue Berechtigung an und fragt beim ersten Abruf einer neuen Adresse ggf. noch einmal nach. Das Script verträgt sich mit [Kleinanzeigen – Anzeige melden](https://github.com/RainbowLabsInc/Kleinanzeigen.de_Anzeige_melden): Beide Buttons stehen dann nebeneinander in der Preiszeile.
 
 ---
 
@@ -97,6 +98,24 @@ Gefällt dir eine übernommene Liste nicht mehr, entfernst du sie in der Verwalt
   <br><sub>Die Vorschau beim Zusammenführen (Beispieldaten).</sub>
 </p>
 
+**Liste abonnieren:**
+
+1. Unten links auf **„Blockliste“** klicken.
+2. Unter **„Abonnierte Listen“** die Adresse der Liste einfügen und **„Abonnieren“** klicken. Links auf die GitHub-Dateiansicht (`github.com/…/blob/…`) werden automatisch in den Rohtext-Link umgewandelt.
+3. Die Liste wird sofort geladen, danach einmal täglich beim Besuch von Kleinanzeigen. Mit **„Aktualisieren“** geht es auch sofort.
+
+* Anbieter aus Abos stehen nicht in deiner eigenen Liste und werden nicht exportiert. Im Menü an einer Anzeige steht „aus Abo …“.
+* Gibst du einen Anbieter aus einem Abo frei, wird er als **Ausnahme** gemerkt und beim nächsten Abgleich nicht wieder hinzugefügt. **„Ausnahmen zurücksetzen“** hebt das auf.
+* **„Entfernen“** beendet das Abo und gibt alle Anbieter daraus frei. Deine eigenen Einträge bleiben.
+* Einzelne Anzeigen (`anzeige:…`) aus abonnierten Listen werden nicht übernommen, nur Anbieter.
+
+<p align="center">
+  <img src="assets/vorschau-abo.png" alt="Abschnitt Abonnierte Listen mit Adressfeld und einer abonnierten Beispielliste" width="480">
+  <br><sub>Eine abonnierte Liste in der Verwaltung (Beispieldaten).</sub>
+</p>
+
+**Eine gemeinsame Liste bereitstellen:** Lege eine Textdatei im [Listenformat](#-listenformat) in einem öffentlichen GitHub-Repo (oder auf einem anderen https-Server) an und teile den Link. Jede Änderung an der Datei kommt bei allen Abonnenten spätestens nach einem Tag an. Am einfachsten exportierst du dafür deine eigene Liste als Textliste und legst sie als Datei ab.
+
 ---
 
 ## 🔧 Wie es technisch funktioniert
@@ -110,6 +129,7 @@ Kleinanzeigen zeigt in den Suchergebnissen in der Regel nicht an, **wer** eine A
 | Neue Anzeigen eines blockierten Anbieters | Bestandslisten und Shop-Seiten blockierter Anbieter werden höchstens einmal am Tag neu geladen, pro Seitenaufruf für höchstens 3 Anbieter. Das lässt sich in der Verwaltung abschalten. |
 | Anzeige oder Bestandsliste öffnen | Die Zuordnung wird nebenbei gelernt, ohne zusätzliche Anfrage. |
 | Optional: „Unbekannte Anzeigen im Hintergrund prüfen“ | Standardmäßig **aus**. Wenn eingeschaltet, lädt das Script bis zu 30 Anzeigenseiten pro Seitenaufruf nacheinander (mit Pause), um auch Anzeigen zu erkennen, die in keiner geladenen Bestandsliste standen. |
+| Abonnierte Listen | Werden mit `GM_xmlhttpRequest` ohne Cookies geladen, beim Abonnieren und danach höchstens einmal am Tag (pro Seitenaufruf höchstens 2 Listen, max. 2 MB). Beim Abgleich kommen neue Anbieter dazu, nicht mehr gelistete fallen weg; eigene Einträge und Ausnahmen bleiben unberührt. |
 | Ausblenden | Die Anzeigen-Karte bekommt nur ein Attribut und eine Hinweiszeile. Die Seite selbst wird nicht verändert. Nachgeladene Ergebnisse erfasst ein `MutationObserver`; baut Kleinanzeigen Teile der Seite neu auf, setzt das Script Buttons und Hinweise wieder ein. |
 
 Gespeichert wird im Speicher des Userscript-Managers (`GM_setValue`). Fehlt der, nutzt das Script den `localStorage` von kleinanzeigen.de. Alle Selektoren und Grenzwerte stehen gesammelt im `CONFIG`-Block am Anfang von `script.user.js`.
@@ -153,9 +173,9 @@ anzeige:3500000000
 }
 ```
 
-`source` ist optional und steht bei Einträgen, die aus einer anderen Liste übernommen wurden. Die Textliste enthält keine Herkunft.
+`source` ist optional und steht bei Einträgen, die aus einer anderen Liste übernommen wurden. Die Textliste enthält keine Herkunft. Für abonnierte Listen gilt dasselbe Format; dort werden nur Anbieter übernommen, keine einzelnen Anzeigen.
 
-Beide Formate sind schlichte Textdateien. Eine gemeinsame Liste kann also später einfach als Datei auf einem Server oder in einem GitHub-Repo liegen (siehe [Ideen für später](#%EF%B8%8F-ideen-für-später)).
+Beide Formate sind schlichte Textdateien und lassen sich deshalb einfach als Datei in einem GitHub-Repo oder auf einem Server ablegen und abonnieren.
 
 ---
 
@@ -165,8 +185,8 @@ Beide Formate sind schlichte Textdateien. Eine gemeinsame Liste kann also späte
 |---|---|
 | Live-Seite, Tampermonkey | ✅ Suchergebnisse: Button „Ausblenden“ neben dem Preis, auch zusammen mit „Anzeige melden“; Anzeigen blockierter Anbieter eingeklappt |
 | Live-Seite, Tampermonkey | ✅ Anzeigenseite eines gewerblichen Anbieters: Anbieter über die Shop-Seite erkannt, beide Buttons bleiben stehen, Shop-Seite lässt sich einlesen |
-| Live-Seite | ⏳ Bestandsliste privater Anbieter einlesen, Shops mit vielen Anzeigen, Violentmonkey |
-| Chromium mit nachgebauten Seiten | ✅ Blockieren, Einklappen, Ganz ausblenden, Kurz zeigen, Freigeben, einzelne Anzeigen, Anzeigenseite, Bestandsliste, Neuaufbau der Seite, Export, Zusammenführen (Vorschau, Auswahl, Herkunft, Doppelte, „Alle freigeben“, Ersetzen, fehlerhafte Dateien), Speicher über `GM_setValue` und `localStorage` |
+| Live-Seite | ⏳ Bestandsliste privater Anbieter einlesen, Shops mit vielen Anzeigen, Abos (Berechtigungsabfrage von Tampermonkey), Violentmonkey |
+| Chromium mit nachgebauten Seiten | ✅ Blockieren, Einklappen, Ganz ausblenden, Kurz zeigen, Freigeben, einzelne Anzeigen, Anzeigenseite, Bestandsliste, Neuaufbau der Seite, Export, Zusammenführen (Vorschau, Auswahl, Herkunft, Doppelte, „Alle freigeben“, Ersetzen, fehlerhafte Dateien), Abos (GitHub-Link, Abgleich, Ausnahmen, Fehler, automatisches Aktualisieren, Entfernen), Speicher über `GM_setValue` und `localStorage` |
 
 Steht in der Verwaltung nach dem Blockieren „0 bekannte Anzeigen“, konnte das Script die Bestandsliste bzw. Shop-Seite nicht einlesen. Dann wird nur die Anzeige ausgeblendet, über die du blockiert hast.
 
@@ -183,6 +203,7 @@ Bitte **keine** Cookies, Tokens oder persönlichen Daten mitschicken.
 
 | Version | Änderungen |
 |---|---|
+| **0.3.0** | Listen abonnieren: Adresse eintragen, tägliche Aktualisierung mit Abgleich, Ausnahmen beim Freigeben, Abo entfernen; Einträge aus Abos werden nicht exportiert. Neue Berechtigung `GM_xmlhttpRequest` |
 | **0.2.0** | Listen zusammenführen: Vorschau mit Auswahl der neuen Anbieter, Herkunft je Eintrag, „Übernommene Listen“ mit „Alle freigeben“; Doppelte in einer Liste werden nur einmal übernommen |
 | **0.1.5** | Aufgeräumt: Kommentare, Texte (Bestandsliste bzw. Shop-Seite), Hilfsfunktionen; Verhalten unverändert |
 | **0.1.4** | Shop-IDs wieder einheitlich kleingeschrieben; behebt, dass unter 0.1.2 blockierte Händler mit 0.1.3 nicht mehr als blockiert erkannt wurden |
@@ -195,7 +216,6 @@ Bitte **keine** Cookies, Tokens oder persönlichen Daten mitschicken.
 
 ## 🗺️ Ideen für später
 
-* **Gemeinsame Listen abonnieren:** Eine oder mehrere Listen-URLs eintragen (z. B. eine Datei in einem GitHub-Repo), die das Script regelmäßig abruft, ähnlich wie Filterlisten in Werbeblockern. Dafür braucht das Script die Berechtigung `GM_xmlhttpRequest` für die jeweilige Adresse. Abonnierte Einträge würden getrennt von der eigenen Liste geführt, damit man sie einzeln ausnehmen kann.
 * Anbieter nach Merkmalen ausblenden (z. B. nur gewerbliche Anbieter, bestimmte Orte).
 * Browser-Extension (Chrome/Edge/Firefox) auf Basis desselben Codes.
 
@@ -206,7 +226,7 @@ Bitte **keine** Cookies, Tokens oder persönlichen Daten mitschicken.
 > Dieses Skript ist ein inoffizielles Tool und steht in keiner Verbindung zu Kleinanzeigen. Die Nutzung erfolgt auf eigene Gefahr. Blockieren wirkt nur in deinem Browser: Der Anbieter erfährt davon nichts, und seine Anzeigen bleiben für alle anderen sichtbar.
 
 * Übernimm fremde Listen nur aus Quellen, denen du vertraust, und prüfe die Vorschau. Eine Liste ist eine Meinung ihres Erstellers, keine Feststellung von Kleinanzeigen.
-* Es liest keine Passwörter oder Nachrichten aus und sendet nichts an fremde Server.
+* Es liest keine Passwörter oder Nachrichten aus und sendet keine Daten an fremde Server. Nur wenn du eine Liste abonnierst, lädt es diese Datei von der angegebenen Adresse (ohne Cookies und ohne Daten von dir); der Server der Liste sieht dabei wie bei jedem Abruf deine IP-Adresse.
 * An Kleinanzeigen stellt es nur lesende Anfragen, wie beim normalen Öffnen einer Seite: die Anzeigenseite beim Klick auf „Ausblenden“ und die Bestandslisten bzw. Shop-Seiten blockierter Anbieter (siehe [Wie es technisch funktioniert](#-wie-es-technisch-funktioniert)).
 * Blockliste, Notizen und Anzeigen-Index liegen nur lokal im Speicher deines Userscript-Managers bzw. Browsers.
 * Es läuft **ausschließlich auf `https://www.kleinanzeigen.de`**, und dort nur auf Seiten unter `/s-…`. Auf allen anderen Websites ist es inaktiv.

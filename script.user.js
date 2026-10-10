@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name          Kleinanzeigen - Nutzer ausblenden (Blockliste)
 // @namespace     https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden
-// @description   Blendet auf Kleinanzeigen.de Anzeigen von Nutzerinnen und Nutzern aus, die du blockierst. Eigene Blockliste mit Notizen, einzelne Anzeigen ausblenden, Listen exportieren und zusammenführen.
+// @description   Blendet auf Kleinanzeigen.de Anzeigen von Nutzerinnen und Nutzern aus, die du blockierst. Eigene Blockliste mit Notizen, einzelne Anzeigen ausblenden, Listen exportieren, zusammenführen und abonnieren.
 // @author        RainbowlabsInc
 // @copyright     2026, RainbowlabsInc
 // @license       MIT
-// @version       0.2.0
+// @version       0.3.0
 // @icon          https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/assets/icon48.png
 // @homepage      https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden
 // @updateURL     https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js
@@ -15,6 +15,10 @@
 // @grant         GM_setValue
 // @grant         GM_addValueChangeListener
 // @grant         GM_registerMenuCommand
+// @grant         GM_xmlhttpRequest
+// @connect       raw.githubusercontent.com
+// @connect       gist.githubusercontent.com
+// @connect       *
 // @noframes
 // @run-at        document-idle
 // ==/UserScript==
@@ -50,7 +54,9 @@
  * Die Blockliste lässt sich als JSON oder als Textliste (ähnlich einer Filterliste)
  * exportieren. Fremde Listen werden nach einer Vorschau mit der eigenen zusammengeführt;
  * übernommene Einträge merken sich ihre Herkunft und lassen sich gemeinsam wieder
- * freigeben. Das Format ist im README beschrieben.
+ * freigeben. Listen unter einer festen Adresse lassen sich abonnieren: Sie werden
+ * täglich neu geladen und mit der Blockliste abgeglichen. Das Format ist im README
+ * beschrieben.
  *
  * Alle Selektoren und Grenzwerte stehen gesammelt in CONFIG.
  */
@@ -58,15 +64,16 @@
 (function () {
     'use strict';
 
-    const VERSION = '0.2.0';
+    const VERSION = '0.3.0';
 
     const CONFIG = {
         keys: {
-            users: 'kua-users',          // { <userId>: { name, note, added, source? } }
+            users: 'kua-users',          // { <userId>: { name, note, added, source?, sub? } }
             ads: 'kua-hidden-ads',       // { <adId>: <Zeitstempel> } einzeln ausgeblendete Anzeigen
             index: 'kua-ad-index',       // { <adId>: <userId> } bekannte Zuordnung Anzeige -> Anbieter
             scanned: 'kua-scanned',      // { <userId>: <Zeitstempel> } letzte geladene Bestandsliste
             settings: 'kua-settings',
+            subs: 'kua-subs',            // { <url>: { title, added, lastCheck, lastSuccess, error, excluded: [] } }
         },
         defaultSettings: {
             mode: 'collapse',            // 'collapse' = Hinweiszeile, 'hide' = ganz ausblenden
@@ -88,6 +95,11 @@
         nameMax: 80,
         noteMax: 300,
         sourceMax: 80,
+        // Abonnierte Listen: so oft neu laden, pro Seitenaufruf höchstens so viele, max. Größe
+        subRefreshMs: 24 * 60 * 60 * 1000,
+        subsPerVisit: 2,
+        subMaxBytes: 2 * 1024 * 1024,
+        subTimeoutMs: 20000,
         // Link zur Bestandsliste bzw. zum Shop (Stand 10/2026)
         sellerUrl: (id) => id.startsWith('pro:')
             ? `/pro/${encodeURIComponent(id.slice(4))}`
@@ -161,6 +173,19 @@
         const m = s.match(/[?&]userId=(\d{1,15})(?!\d)/);
         if (m) return m[1];
         return ID_RE.test(s) ? s.toLowerCase() : null;
+    }
+
+    // Adresse einer abonnierten Liste: nur https, GitHub-Dateiansicht -> Rohtext
+    function normalizeListUrl(raw) {
+        if (typeof raw !== 'string') return null;
+        let url;
+        try { url = new URL(raw.trim()); } catch (e) { return null; }
+        if (url.protocol !== 'https:' || url.username || url.password) return null;
+        const blob = url.hostname === 'github.com' && url.pathname.match(/^\/([^/]+)\/([^/]+)\/(?:blob|raw)\/(.+)$/);
+        if (blob) url = new URL(`https://raw.githubusercontent.com/${blob[1]}/${blob[2]}/${blob[3]}`);
+        url.hash = '';
+        const s = url.href;
+        return s.length <= 500 ? s : null;
     }
 
     const isShop = (id) => id.startsWith('pro:');
@@ -245,6 +270,8 @@
         };
         const source = clip(o.source, CONFIG.sourceMax);
         if (source) user.source = source;
+        const sub = normalizeListUrl(o.sub);
+        if (sub) user.sub = sub;
         return user;
     }
 
@@ -294,7 +321,28 @@
             index,
             scanned,
             settings,
+            subs: loadSubs(),
         };
+    }
+
+    function loadSubs() {
+        const subs = {};
+        const raw = load(CONFIG.keys.subs, {});
+        if (!isObj(raw)) return subs;
+        for (const [rawUrl, v] of Object.entries(raw)) {
+            const url = normalizeListUrl(rawUrl);
+            if (!url || !isObj(v)) continue;
+            const num = (x) => (typeof x === 'number' ? x : 0);
+            subs[url] = {
+                title: clip(v.title, CONFIG.sourceMax),
+                added: num(v.added) || Date.now(),
+                lastCheck: num(v.lastCheck),
+                lastSuccess: num(v.lastSuccess),
+                error: clip(v.error, 200),
+                excluded: Array.isArray(v.excluded) ? v.excluded.map(normalizeUserId).filter(Boolean) : [],
+            };
+        }
+        return subs;
     }
 
     let state = loadState();
@@ -303,6 +351,7 @@
     const saveAds = () => save(CONFIG.keys.ads, state.ads);
     const saveScanned = () => save(CONFIG.keys.scanned, state.scanned);
     const saveSettings = () => save(CONFIG.keys.settings, state.settings);
+    const saveSubs = () => save(CONFIG.keys.subs, state.subs);
 
     // Neue Zuordnungen sammeln und gebündelt speichern. Vor dem Speichern mit dem
     // gespeicherten Stand zusammenführen, damit parallel offene Tabs nichts überschreiben.
@@ -493,7 +542,14 @@
     }
 
     function unblockUser(id) {
-        if (!state.users[id]) return;
+        const u = state.users[id];
+        if (!u) return;
+        // Aus einem Abo: als Ausnahme merken, sonst käme der Eintrag beim nächsten Abgleich zurück
+        const sub = u.sub && state.subs[u.sub];
+        if (sub && !sub.excluded.includes(id)) {
+            sub.excluded.push(id);
+            saveSubs();
+        }
         delete state.users[id];
         saveUsers();
         refreshPage();
@@ -508,6 +564,96 @@
     function unhideAd(adId) {
         delete state.ads[adId];
         saveAds();
+        refreshPage();
+    }
+
+    // ------------------------------------------------------------------
+    // Abonnierte Listen
+    // ------------------------------------------------------------------
+
+    // Lädt die Liste ohne Cookies. GM_xmlhttpRequest umgeht die Sicherheitsregeln der Seite
+    // (Tampermonkey fragt beim ersten Abruf einer neuen Adresse ggf. nach); ohne fetch().
+    function fetchListText(url) {
+        return new Promise((resolve, reject) => {
+            const check = (text) => (text.length > CONFIG.subMaxBytes
+                ? reject(new Error('Die Liste ist zu groß (max. 2 MB).')) : resolve(text));
+            if (typeof GM_xmlhttpRequest === 'function') {
+                GM_xmlhttpRequest({
+                    method: 'GET', url, anonymous: true, timeout: CONFIG.subTimeoutMs,
+                    headers: { 'Cache-Control': 'no-cache' },
+                    onload: (r) => (r.status >= 200 && r.status < 300 ? check(r.responseText || '') : reject(new Error(`HTTP ${r.status}`))),
+                    onerror: () => reject(new Error('Adresse nicht erreichbar oder Zugriff nicht erlaubt')),
+                    ontimeout: () => reject(new Error('Zeitüberschreitung')),
+                });
+            } else {
+                fetch(url, { credentials: 'omit', cache: 'no-cache' })
+                    .then(r => (r.ok ? r.text() : Promise.reject(new Error(`HTTP ${r.status}`))))
+                    .then(check, () => reject(new Error('Adresse nicht erreichbar')));
+            }
+        });
+    }
+
+    // Gleicht ein Abo mit der Blockliste ab: neue Anbieter dazu, nicht mehr gelistete weg.
+    // Eigene Einträge und Einträge aus anderen Listen bleiben unberührt, Ausnahmen werden übersprungen.
+    // Einzelne Anzeigen (anzeige:...) werden bei Abos nicht übernommen.
+    const syncing = new Set();
+
+    async function syncSub(url) {
+        const sub = state.subs[url];
+        if (!sub || syncing.has(url)) return null;
+        syncing.add(url);
+        try {
+            sub.lastCheck = Date.now();
+            let list;
+            try {
+                list = parseList(await fetchListText(url));
+            } catch (e) {
+                sub.error = clip(e.message, 200);
+                saveSubs();
+                throw e;
+            }
+            const title = list.title || sub.title || new URL(url).hostname;
+            const wanted = new Map(list.users.filter(u => !sub.excluded.includes(u.id)).map(u => [u.id, u]));
+            const result = { added: 0, removed: 0, total: wanted.size, title };
+            for (const [id, u] of Object.entries(state.users)) {
+                if (u.sub === url && !wanted.has(id)) { delete state.users[id]; result.removed++; }
+            }
+            for (const [id, u] of wanted) {
+                const cur = state.users[id];
+                if (!cur) {
+                    state.users[id] = cleanUser({ ...u, added: Date.now(), source: title, sub: url });
+                    result.added++;
+                } else if (cur.sub === url) {
+                    state.users[id] = cleanUser({ ...u, added: cur.added, source: title, sub: url });
+                }
+            }
+            Object.assign(sub, { title, lastSuccess: Date.now(), error: '' });
+            saveUsers();
+            saveSubs();
+            refreshPage();
+            return result;
+        } finally {
+            syncing.delete(url);
+        }
+    }
+
+    // Fällige Abos nacheinander aktualisieren (beim Seitenaufruf)
+    async function refreshSubs() {
+        const now = Date.now();
+        const due = Object.keys(state.subs)
+            .filter(url => now - state.subs[url].lastCheck > CONFIG.subRefreshMs)
+            .sort((a, b) => state.subs[a].lastCheck - state.subs[b].lastCheck)
+            .slice(0, CONFIG.subsPerVisit);
+        for (const url of due) {
+            try { await syncSub(url); } catch (e) { console.warn('[Nutzer ausblenden] Abo nicht geladen:', url, e); }
+        }
+    }
+
+    function removeSub(url) {
+        Object.keys(state.users).forEach(id => { if (state.users[id].sub === url) delete state.users[id]; });
+        delete state.subs[url];
+        saveUsers();
+        saveSubs();
         refreshPage();
     }
 
@@ -767,7 +913,8 @@
             const parts = [el('p', { className: 'kua-muted' }, sellerText)];
             if (blocked) {
                 parts.push(el('p', { className: 'kua-note', dataset: { kind: 'ok' } },
-                    `Blockiert seit ${fmtDate(blocked.added)}${blocked.note ? ` · ${blocked.note}` : ''}`));
+                    `Blockiert seit ${fmtDate(blocked.added)}${blocked.note ? ` · ${blocked.note}` : ''}`
+                    + (blocked.source ? ` · aus ${blocked.sub ? 'Abo ' : ''}„${blocked.source}“` : '')));
                 parts.push(el('div', { className: 'kua-row' },
                     el('span', { className: 'kua-spacer' }),
                     el('button', { type: 'button', className: 'kua-action', onclick: () => { unblockUser(uid); render(); } }, 'Anbieter freigeben')));
@@ -1060,7 +1207,7 @@
         applyOverview();
         watchPage(applyOverview);
 
-        setTimeout(() => refreshBlockedSellers(), 3000);
+        setTimeout(() => refreshSubs().then(refreshBlockedSellers), 3000);
     }
 
     // Das Menü bleibt offen, solange sein Button noch auf der Seite ist
@@ -1150,8 +1297,11 @@
     // Blockliste: Export / Import
     // ------------------------------------------------------------------
 
+    // Exportiert wird nur die eigene Liste (inkl. zusammengeführter Listen), keine Abo-Einträge
+    const ownUsers = () => Object.entries(state.users).filter(([, u]) => !u.sub);
+
     function exportJson() {
-        const users = Object.entries(state.users)
+        const users = ownUsers()
             .sort((a, b) => a[1].added - b[1].added)
             .map(([id, u]) => ({ id, name: u.name, note: u.note, added: new Date(u.added).toISOString(), ...(u.source ? { source: u.source } : {}) }));
         return JSON.stringify({
@@ -1172,7 +1322,7 @@
             '# Eine Zeile pro Anbieter: <Nutzer-ID> [Name] [# Notiz]',
             '# Einzelne Anzeigen: anzeige:<Anzeigen-Nr>',
         ];
-        Object.entries(state.users)
+        ownUsers()
             .sort((a, b) => a[1].added - b[1].added)
             .forEach(([id, u]) => {
                 let line = id;
@@ -1330,7 +1480,7 @@
         if (!panel) return;
         const { box } = panel;
         const scrollTop = box.scrollTop;
-        const ids = Object.keys(state.users);
+        const ids = Object.keys(state.users).filter(id => !state.users[id].sub);
         const adCounts = {};
         Object.values(state.index).forEach(uid => { if (state.users[uid]) adCounts[uid] = (adCounts[uid] || 0) + 1; });
 
@@ -1529,6 +1679,67 @@
                         if (!window.confirm(`Alle ${n} Anbieter aus „${src}“ freigeben? Deine eigenen Einträge bleiben erhalten.`)) return;
                         removeSource(src);
                     } }, 'Alle freigeben')))) : null;
+        // --- Abonnierte Listen
+        const subUrl = el('input', { className: 'kua-input', type: 'url', placeholder: 'https://… (Adresse der Liste)', 'aria-label': 'Adresse der Liste' });
+        const subStatus = el('p', { className: 'kua-note', role: 'status', hidden: true });
+        const subCounts = {};
+        Object.values(state.users).forEach(u => { if (u.sub) subCounts[u.sub] = (subCounts[u.sub] || 0) + 1; });
+        const subResultText = (r) => `„${r.title}“: ${r.total} Anbieter in der Liste`
+            + (r.added || r.removed ? ` (${r.added} neu, ${r.removed} entfernt)` : ', keine Änderungen') + '.';
+        const doSubscribe = async () => {
+            const url = normalizeListUrl(subUrl.value);
+            if (!url) { setNote(subStatus, 'Bitte eine vollständige https-Adresse angeben, z. B. https://raw.githubusercontent.com/…/liste.txt.', 'error'); return; }
+            if (state.subs[url]) { setNote(subStatus, 'Diese Liste ist bereits abonniert.', 'ok'); return; }
+            state.subs[url] = { title: '', added: Date.now(), lastCheck: 0, lastSuccess: 0, error: '', excluded: [] };
+            setNote(subStatus, 'Liste wird geladen …');
+            try {
+                const r = await syncSub(url);
+                renderPanel();
+                showPanelNote(`Abonniert: ${subResultText(r)}`
+                    + (r.added ? ` Die Anzeigen der neuen Anbieter werden nach und nach eingelesen (bis zu ${CONFIG.refreshPerVisit} Anbieter pro Seitenaufruf).` : ''), 'ok');
+                if (r.added) refreshBlockedSellers().then(() => renderPanel());
+            } catch (e) {
+                delete state.subs[url];
+                saveSubs();
+                setNote(subStatus, `Die Liste konnte nicht geladen werden: ${e.message}. Nichts wurde abonniert.`, 'error');
+            }
+        };
+        subUrl.addEventListener('keydown', e => { if (e.key === 'Enter') doSubscribe(); });
+        const fmtTime = (ts) => (ts ? new Date(ts).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : 'nie');
+        const subRows = Object.entries(state.subs).sort((a, b) => a[1].added - b[1].added).map(([url, sub]) => {
+            const n = subCounts[url] || 0;
+            const update = async () => {
+                try {
+                    const r = await syncSub(url);
+                    renderPanel();
+                    if (r) showPanelNote(`Aktualisiert: ${subResultText(r)}`, 'ok');
+                    if (r && r.added) refreshBlockedSellers().then(() => renderPanel());
+                } catch (e) {
+                    renderPanel();
+                    showPanelNote(`„${sub.title || url}“ konnte nicht geladen werden: ${e.message}.`, 'error');
+                }
+            };
+            return el('div', { className: 'kua-user' },
+                el('div', { className: 'kua-user-main' },
+                    el('a', { href: url, target: '_blank', rel: 'noopener noreferrer' }, sub.title || url),
+                    el('span', { className: 'kua-muted' }, `${n} Anbieter · zuletzt aktualisiert ${fmtTime(sub.lastSuccess)}`
+                        + (sub.excluded.length ? ` · ${sub.excluded.length} Ausnahme${sub.excluded.length === 1 ? '' : 'n'}` : '')),
+                    sub.error ? el('span', { className: 'kua-muted', style: 'color:#8e1c1c' }, `Letzter Abruf fehlgeschlagen: ${sub.error}`) : null,
+                    sub.excluded.length ? el('button', { type: 'button', className: 'kua-link', style: 'justify-self:start',
+                        onclick: () => { sub.excluded = []; saveSubs(); update(); } }, 'Ausnahmen zurücksetzen') : null),
+                el('div', { className: 'kua-row', style: 'flex-direction:column;align-items:stretch;gap:4px' },
+                    el('button', { type: 'button', className: 'kua-action', onclick: update }, 'Aktualisieren'),
+                    el('button', { type: 'button', className: 'kua-action', dataset: { danger: '' },
+                        onclick: () => {
+                            if (!window.confirm(`Abo „${sub.title || url}“ entfernen? Die ${n} Anbieter daraus werden freigegeben, deine eigenen Einträge bleiben.`)) return;
+                            removeSub(url);
+                            renderPanel();
+                            showPanelNote(`Abo entfernt, ${n} Anbieter freigegeben.`, 'ok');
+                        } }, 'Entfernen')));
+        });
+        const subCount = Object.keys(state.subs).length;
+        const subTotal = Object.values(subCounts).reduce((a, b) => a + b, 0);
+
         const stamp = new Date().toISOString().slice(0, 10);
         const exportStatus = el('p', { className: 'kua-note', role: 'status', hidden: true });
 
@@ -1543,6 +1754,16 @@
                 ids.length > 5 ? filter : null,
                 listBox,
                 sourcesBox),
+            el('section', { className: 'kua-section' },
+                el('h3', {}, `Abonnierte Listen (${subCount})`),
+                el('p', { className: 'kua-hint' }, 'Eine Liste unter einer festen Adresse abonnieren, z. B. eine Datei in einem GitHub-Repo. '
+                    + 'Sie wird einmal täglich neu geladen: neue Anbieter kommen dazu, entfernte fallen weg. Gibst du einen Anbieter aus einem Abo frei, bleibt er freigegeben. '
+                    + 'Beim Abruf sieht der Server der Liste deine IP-Adresse; es werden keine Daten mitgeschickt.'),
+                el('div', { className: 'kua-row' }, subUrl,
+                    el('button', { type: 'button', className: 'kua-action', dataset: { primary: '' }, onclick: doSubscribe }, 'Abonnieren')),
+                subStatus,
+                subRows.length ? el('div', { className: 'kua-users' }, subRows) : null,
+                subTotal ? el('p', { className: 'kua-hint' }, `Zusammen ${subTotal} Anbieter aus Abos. Sie stehen nicht in der Liste oben und werden nicht exportiert.`) : null),
             el('section', { className: 'kua-section' },
                 el('h3', {}, 'Einzeln ausgeblendete Anzeigen'),
                 el('div', { className: 'kua-row' },
@@ -1612,7 +1833,7 @@
     }
 
     function watchStorage() {
-        const keys = [CONFIG.keys.users, CONFIG.keys.ads, CONFIG.keys.settings];
+        const keys = [CONFIG.keys.users, CONFIG.keys.ads, CONFIG.keys.settings, CONFIG.keys.subs];
         if (hasGM && typeof GM_addValueChangeListener === 'function') {
             keys.forEach(k => GM_addValueChangeListener(k, (name, oldValue, newValue, remote) => { if (remote) onExternalChange(); }));
         } else if (!hasGM) {
