@@ -5,7 +5,7 @@
 // @author        RainbowlabsInc
 // @copyright     2026, RainbowlabsInc
 // @license       MIT
-// @version       0.1.3
+// @version       0.1.4
 // @icon          https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/assets/icon48.png
 // @homepage      https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden
 // @updateURL     https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js
@@ -52,7 +52,7 @@
 (function () {
     'use strict';
 
-    const VERSION = '0.1.3';
+    const VERSION = '0.1.4';
 
     const CONFIG = {
         keys: {
@@ -139,8 +139,9 @@
         let m = s.match(/s-bestandsliste\.html\?(?:[^#]*&)?userId=(\d{1,15})(?!\d)/);
         if (m) return m[1];
         m = s.match(/^(?:https:\/\/www\.kleinanzeigen\.de)?\/pro\/([a-z0-9][a-z0-9_-]{0,79})(?:[/?#]|$)/i);
-        // Schreibweise beibehalten: die Shop-Adresse wird später genau so wieder aufgerufen
-        if (m) return 'pro:' + m[1];
+        // Kleinanzeigen unterscheidet bei /pro/<Shop> nicht nach Groß-/Kleinschreibung
+        // (geprüft 10/2026), daher einheitlich klein speichern
+        if (m) return 'pro:' + m[1].toLowerCase();
         return null;
     }
 
@@ -152,7 +153,7 @@
         if (fromLink) return fromLink;
         let m = s.match(/[?&]userId=(\d{1,15})(?!\d)/);
         if (m) return m[1];
-        return ID_RE.test(s) ? s.replace(/^pro:/i, 'pro:') : null;
+        return ID_RE.test(s) ? s.toLowerCase() : null;
     }
 
     function userLabel(id, fallbackName) {
@@ -247,6 +248,12 @@
         return out;
     }
 
+    function loadIndex() {
+        const index = loadMap(CONFIG.keys.index, (k, v) => /^\d{1,15}$/.test(k) && typeof v === 'string' && ID_RE.test(v));
+        Object.keys(index).forEach(k => { index[k] = index[k].toLowerCase(); });
+        return index;
+    }
+
     function loadState() {
         const settings = { ...CONFIG.defaultSettings };
         const rawSettings = load(CONFIG.keys.settings, {});
@@ -255,11 +262,16 @@
             if (typeof rawSettings.dailyRefresh === 'boolean') settings.dailyRefresh = rawSettings.dailyRefresh;
             if (typeof rawSettings.autoResolve === 'boolean') settings.autoResolve = rawSettings.autoResolve;
         }
+        // IDs vereinheitlichen (0.1.3 hat Shop-IDs in Originalschreibweise gespeichert)
+        const index = loadIndex();
+        const scanned = {};
+        Object.entries(loadMap(CONFIG.keys.scanned, (k, v) => ID_RE.test(k) && typeof v === 'number'))
+            .forEach(([k, v]) => { scanned[k.toLowerCase()] = v; });
         return {
             users: loadUsers(),
             ads: loadMap(CONFIG.keys.ads, (k, v) => /^\d{1,15}$/.test(k) && typeof v === 'number'),
-            index: loadMap(CONFIG.keys.index, (k, v) => /^\d{1,15}$/.test(k) && typeof v === 'string' && ID_RE.test(v)),
-            scanned: loadMap(CONFIG.keys.scanned, (k, v) => ID_RE.test(k) && typeof v === 'number'),
+            index,
+            scanned,
             settings,
         };
     }
@@ -285,7 +297,7 @@
 
     function flushIndex() {
         if (!Object.keys(pendingIndex).length) return;
-        const merged = { ...loadMap(CONFIG.keys.index, (k, v) => /^\d{1,15}$/.test(k) && typeof v === 'string'), ...pendingIndex };
+        const merged = { ...loadIndex(), ...pendingIndex };
         const keys = Object.keys(merged);
         if (keys.length > CONFIG.indexMax) {
             keys.sort((a, b) => Number(a) - Number(b))
