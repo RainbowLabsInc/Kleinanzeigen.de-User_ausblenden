@@ -6,7 +6,7 @@
 
 **Eine eigene Blockliste für Kleinanzeigen.de: Anzeigen von Anbietern, die du blockierst, verschwinden aus deinen Suchergebnissen.**
 
-[![Version](https://img.shields.io/badge/version-0.1.4-blue?style=flat-square)](https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js)
+[![Version](https://img.shields.io/badge/version-0.1.5-blue?style=flat-square)](https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js)
 [![Plattform](https://img.shields.io/badge/plattform-Kleinanzeigen.de-green?style=flat-square)](https://www.kleinanzeigen.de)
 [![Userscript](https://img.shields.io/badge/Tampermonkey-Violentmonkey-black?style=flat-square&logo=tampermonkey)](#%EF%B8%8F-installation)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
@@ -39,8 +39,8 @@ Manche Anbieter tauchen in jeder Suche wieder auf: mit Lockpreisen wie **„2 �
 * 🚫 **Anbieter blockieren:** Ein Klick auf „Ausblenden“ neben dem Preis öffnet ein kleines Menü. Das Script ermittelt den Anbieter, du gibst ihm optional einen Namen und eine Notiz, fertig.
 * 🙈 **Einzelne Anzeigen ausblenden:** Wenn dich nur eine Anzeige stört und nicht der ganze Anbieter.
 * 📋 **Einklappen oder ganz ausblenden:** Standardmäßig bleibt eine schmale Hinweiszeile mit „Kurz zeigen“ und „Freigeben“ stehen. Wer will, lässt die Anzeigen ganz verschwinden.
-* 🔎 **Auch auf der Anzeigenseite:** Am Anbieter-Namen und unten links steht ein Button „Blockieren“. Bei blockierten Anbietern erscheint unten ein Hinweis.
-* 📒 **Verwaltung:** Über den Button „Blockliste“ unten links (oder das Tampermonkey-Menü) siehst du alle blockierten Anbieter mit Notiz, Datum und Zahl der bekannten Anzeigen. Du kannst auch eine Nutzer-ID oder einen Link zur Bestandsliste direkt eintragen.
+* 🔎 **Auch auf der Anzeigenseite:** Am Anbieter-Namen und unten links steht ein Button „Blockieren“, bei privaten wie gewerblichen Anbietern. Bei blockierten Anbietern erscheint unten ein Hinweis.
+* 📒 **Verwaltung:** Über den Button „Blockliste“ unten links (oder das Tampermonkey-Menü) siehst du alle blockierten Anbieter mit Notiz, Datum und Zahl der bekannten Anzeigen. Du kannst auch eine Nutzer-ID oder einen Link zum Anbieter (Bestandsliste oder Shop) direkt eintragen.
 * 💾 **Export und Import:** als JSON-Datei, als Textliste oder über die Zwischenablage. Beim Import wird ergänzt, auf Wunsch ersetzt.
 * 🔄 **Mehrere Tabs:** Änderungen gelten sofort auch in anderen offenen Kleinanzeigen-Tabs.
 * 🔒 **Strikt begrenzt:** läuft nur auf `https://www.kleinanzeigen.de` und dort nur auf Seiten unter `/s-…` (Suche, Anzeigen, Bestandslisten).
@@ -90,12 +90,12 @@ Kleinanzeigen zeigt in den Suchergebnissen in der Regel nicht an, **wer** eine A
 
 | Situation | Was passiert |
 |---|---|
-| Klick auf „Ausblenden“ | Das Script lädt die Anzeigenseite, wie beim normalen Öffnen, und liest den Anbieter aus dem Link zu seiner Bestandsliste (`/s-bestandsliste.html?userId=…`). Gewerbliche Shops ohne diesen Link werden über `/pro/<shop>` erkannt. |
-| „Anbieter blockieren“ | Die Bestandsliste des Anbieters wird einmal geladen (höchstens 5 Seiten). Alle dort gelisteten Anzeigen kommen in den Index und werden sofort ausgeblendet. |
-| Neue Anzeigen eines blockierten Anbieters | Die Bestandslisten blockierter Anbieter werden höchstens einmal am Tag neu geladen, pro Seitenaufruf für höchstens 3 Anbieter. Das lässt sich in der Verwaltung abschalten. |
+| Klick auf „Ausblenden“ | Das Script lädt die Anzeigenseite, wie beim normalen Öffnen, und liest den Anbieter aus: bei privaten Anbietern aus dem Link zur Bestandsliste (`/s-bestandsliste.html?userId=…`), bei gewerblichen aus dem Link zur Shop-Seite (`/pro/<shop>`). |
+| „Anbieter blockieren“ | Bestandsliste bzw. Shop-Seite des Anbieters wird einmal geladen (höchstens 5 Seiten). Alle dort gelisteten Anzeigen kommen in den Index und werden sofort ausgeblendet. |
+| Neue Anzeigen eines blockierten Anbieters | Bestandslisten und Shop-Seiten blockierter Anbieter werden höchstens einmal am Tag neu geladen, pro Seitenaufruf für höchstens 3 Anbieter. Das lässt sich in der Verwaltung abschalten. |
 | Anzeige oder Bestandsliste öffnen | Die Zuordnung wird nebenbei gelernt, ohne zusätzliche Anfrage. |
 | Optional: „Unbekannte Anzeigen im Hintergrund prüfen“ | Standardmäßig **aus**. Wenn eingeschaltet, lädt das Script bis zu 30 Anzeigenseiten pro Seitenaufruf nacheinander (mit Pause), um auch Anzeigen zu erkennen, die in keiner geladenen Bestandsliste standen. |
-| Ausblenden | Die Anzeigen-Karte bekommt nur ein Attribut und eine Hinweiszeile. Die Seite selbst wird nicht verändert, nachgeladene Ergebnisse werden per `MutationObserver` erfasst. |
+| Ausblenden | Die Anzeigen-Karte bekommt nur ein Attribut und eine Hinweiszeile. Die Seite selbst wird nicht verändert. Nachgeladene Ergebnisse erfasst ein `MutationObserver`; baut Kleinanzeigen Teile der Seite neu auf, setzt das Script Buttons und Hinweise wieder ein. |
 
 Gespeichert wird im Speicher des Userscript-Managers (`GM_setValue`). Fehlt der, nutzt das Script den `localStorage` von kleinanzeigen.de. Alle Selektoren und Grenzwerte stehen gesammelt im `CONFIG`-Block am Anfang von `script.user.js`.
 
@@ -119,7 +119,7 @@ anzeige:3500000000
 ```
 
 * Eine Nutzer-ID ist die Zahl aus dem Link zur Bestandsliste eines Anbieters („Weitere Anzeigen“ auf der Anzeigenseite). Statt der Zahl darf auch der ganze Link in der Zeile stehen.
-* `pro:<shop>` steht für gewerbliche Shops mit eigener Seite unter `kleinanzeigen.de/pro/<shop>`.
+* `pro:<shop>` steht für gewerbliche Anbieter mit Shop-Seite unter `kleinanzeigen.de/pro/<shop>`. Stattdessen darf auch der Link zur Shop-Seite in der Zeile stehen.
 * Ungültige Zeilen werden beim Import übersprungen und gezählt.
 
 **JSON** (vollständig, mit Datum):
@@ -143,13 +143,14 @@ Beide Formate sind schlichte Textdateien. Eine gemeinsame Liste kann also späte
 
 ## 🧪 Getestet
 
-| Browser | Erweiterung | Stand |
-|---|---|---|
-| Chromium | (Testumgebung mit nachgebauten Seiten) | ✅ Blockieren, Einklappen, Ganz ausblenden, Kurz zeigen, Freigeben, einzelne Anzeigen, Shops (`/pro/`), Anzeigenseite, Bestandsliste, Export und Import (Text, JSON, Ersetzen, fehlerhafte Dateien), Speicher über `GM_setValue` und `localStorage` |
-| Live-Seite | Tampermonkey | ✅ Suchergebnisse: Button „Ausblenden“ neben dem Preis (auch zusammen mit „Anzeige melden“), Anzeige eines blockierten Anbieters eingeklappt. Anzeigenseite eines gewerblichen Anbieters: Anbieter über `/pro/<Shop>` erkannt, beide Buttons bleiben stehen, Shop-Seite lässt sich einlesen |
-| Live-Seite | Tampermonkey | ⏳ Bestandsliste privater Anbieter einlesen, Shops mit vielen Anzeigen, Violentmonkey |
+| Umgebung | Stand |
+|---|---|
+| Live-Seite, Tampermonkey | ✅ Suchergebnisse: Button „Ausblenden“ neben dem Preis, auch zusammen mit „Anzeige melden“; Anzeigen blockierter Anbieter eingeklappt |
+| Live-Seite, Tampermonkey | ✅ Anzeigenseite eines gewerblichen Anbieters: Anbieter über die Shop-Seite erkannt, beide Buttons bleiben stehen, Shop-Seite lässt sich einlesen |
+| Live-Seite | ⏳ Bestandsliste privater Anbieter einlesen, Shops mit vielen Anzeigen, Violentmonkey |
+| Chromium mit nachgebauten Seiten | ✅ Blockieren, Einklappen, Ganz ausblenden, Kurz zeigen, Freigeben, einzelne Anzeigen, Anzeigenseite, Bestandsliste, Neuaufbau der Seite, Export und Import (Text, JSON, Ersetzen, fehlerhafte Dateien), Speicher über `GM_setValue` und `localStorage` |
 
-> **Stand 0.1.4:** Gewerbliche Anbieter stehen auf der Anzeigenseite im Kasten `#viewad-bizteaser` und verlinken nur auf `/pro/<Shop>` (nicht auf eine Bestandsliste). Ob die Bestandsliste privater Anbieter genauso eingelesen werden kann, ist auf der Live-Seite noch nicht bestätigt. Wenn ein Anbieter nicht erkannt wird oder nach dem Blockieren „0 bekannte Anzeigen“ in der Verwaltung steht, hilft ein Issue.
+Steht in der Verwaltung nach dem Blockieren „0 bekannte Anzeigen“, konnte das Script die Bestandsliste bzw. Shop-Seite nicht einlesen. Dann wird nur die Anzeige ausgeblendet, über die du blockiert hast.
 
 Funktioniert etwas nicht, hilft ein [Issue](https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/issues) mit:
 
@@ -164,11 +165,12 @@ Bitte **keine** Cookies, Tokens oder persönlichen Daten mitschicken.
 
 | Version | Änderungen |
 |---|---|
-| **0.1.4** | Shop-IDs wieder einheitlich kleingeschrieben (Kleinanzeigen unterscheidet bei `/pro/<Shop>` nicht nach Groß-/Kleinschreibung). Behebt, dass mit 0.1.2 blockierte Händler unter 0.1.3 auf der Anzeigenseite nicht als blockiert erkannt wurden |
-| **0.1.3** | Gewerbliche Anbieter: Schreibweise der Shop-Adresse (`/pro/<Shop>`) bleibt erhalten, damit die Shop-Seite beim Einlesen gefunden wird; Händler-Kasten `#viewad-bizteaser` als bekannter Bereich |
-| **0.1.2** | Anzeigenseite: zusätzlich ein fester Button „Anbieter blockieren“ unten links, der auch dann bleibt, wenn die Seite den Anbieter-Kasten neu aufbaut. Styles, Buttons und Hinweise werden wieder eingesetzt, auch wenn die Seite größere Teile des Dokuments austauscht |
-| **0.1.1** | Button auf der Anzeigenseite verschwand kurz nach dem Laden: Wird der Anbieter-Kasten von der Seite neu aufgebaut, setzt das Script den Button wieder ein. Ebenso für Buttons und Hinweiszeilen in den Suchergebnissen |
-| **0.1.0** | Erste Version: Anbieter blockieren, einzelne Anzeigen ausblenden, Einklappen oder ganz Ausblenden, Verwaltung mit Notizen, Export und Import (JSON und Textliste), Anzeigen-Index mit täglicher Aktualisierung der Bestandslisten |
+| **0.1.5** | Aufgeräumt: Kommentare, Texte (Bestandsliste bzw. Shop-Seite), Hilfsfunktionen; Verhalten unverändert |
+| **0.1.4** | Shop-IDs wieder einheitlich kleingeschrieben; behebt, dass unter 0.1.2 blockierte Händler mit 0.1.3 nicht mehr als blockiert erkannt wurden |
+| **0.1.3** | Gewerbliche Anbieter: Händler-Kasten `#viewad-bizteaser` als bekannter Bereich (Schreibweise der Shop-Adresse beibehalten, in 0.1.4 zurückgenommen) |
+| **0.1.2** | Anzeigenseite: zusätzlicher fester Button unten links; Buttons, Hinweise und Styles kommen zurück, auch wenn die Seite größere Teile austauscht |
+| **0.1.1** | Buttons und Hinweiszeilen werden wieder eingesetzt, wenn Kleinanzeigen den Anbieter-Kasten oder Karten nach dem Laden neu aufbaut |
+| **0.1.0** | Erste Version: Anbieter blockieren, einzelne Anzeigen ausblenden, Einklappen oder ganz Ausblenden, Verwaltung mit Notizen, Export und Import (JSON und Textliste), Anzeigen-Index mit täglicher Aktualisierung |
 
 ---
 
@@ -185,7 +187,7 @@ Bitte **keine** Cookies, Tokens oder persönlichen Daten mitschicken.
 > Dieses Skript ist ein inoffizielles Tool und steht in keiner Verbindung zu Kleinanzeigen. Die Nutzung erfolgt auf eigene Gefahr. Blockieren wirkt nur in deinem Browser: Der Anbieter erfährt davon nichts, und seine Anzeigen bleiben für alle anderen sichtbar.
 
 * Es liest keine Passwörter oder Nachrichten aus und sendet nichts an fremde Server.
-* An Kleinanzeigen stellt es nur lesende Anfragen, wie beim normalen Öffnen einer Seite: die Anzeigenseite beim Klick auf „Ausblenden“ und die Bestandslisten blockierter Anbieter (siehe [Wie es technisch funktioniert](#-wie-es-technisch-funktioniert)).
+* An Kleinanzeigen stellt es nur lesende Anfragen, wie beim normalen Öffnen einer Seite: die Anzeigenseite beim Klick auf „Ausblenden“ und die Bestandslisten bzw. Shop-Seiten blockierter Anbieter (siehe [Wie es technisch funktioniert](#-wie-es-technisch-funktioniert)).
 * Blockliste, Notizen und Anzeigen-Index liegen nur lokal im Speicher deines Userscript-Managers bzw. Browsers.
 * Es läuft **ausschließlich auf `https://www.kleinanzeigen.de`**, und dort nur auf Seiten unter `/s-…`. Auf allen anderen Websites ist es inaktiv.
 * Aufbau und Teile des Codes (Erkennung der Anzeigen-Karten und der Preiszeile) stammen aus [Kleinanzeigen – Anzeige melden](https://github.com/RainbowLabsInc/Kleinanzeigen.de_Anzeige_melden).

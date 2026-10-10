@@ -5,7 +5,7 @@
 // @author        RainbowlabsInc
 // @copyright     2026, RainbowlabsInc
 // @license       MIT
-// @version       0.1.4
+// @version       0.1.5
 // @icon          https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/assets/icon48.png
 // @homepage      https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden
 // @updateURL     https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js
@@ -22,13 +22,15 @@
 /*
  * Funktionsweise
  * --------------
- * Die Blockliste speichert Anbieter über ihre Nutzer-ID, also die Zahl aus dem Link
- * zur Bestandsliste (/s-bestandsliste.html?userId=<ID>). Gewerbliche Shops ohne diesen
- * Link werden als "pro:<shop-name>" gespeichert (aus /pro/<shop-name>).
+ * Anbieter werden über ihre ID gespeichert:
+ *   - private Anbieter: die Zahl aus dem Link zur Bestandsliste
+ *     (/s-bestandsliste.html?userId=<ID>),
+ *   - gewerbliche Anbieter: "pro:<shop>" aus dem Link zur Shop-Seite (/pro/<shop>,
+ *     auf der Anzeigenseite im Kasten #viewad-bizteaser).
  *
  * Die Karten in den Suchergebnissen enthalten den Anbieter in der Regel nicht. Darum
  * merkt sich das Script, welche Anzeige zu welchem Anbieter gehört (Anzeigen-Index):
- *   - beim Blockieren: die Bestandsliste des Anbieters wird einmal geladen,
+ *   - beim Blockieren: Bestandsliste bzw. Shop-Seite des Anbieters einmal laden,
  *   - danach höchstens einmal am Tag erneut (für neue Anzeigen, abschaltbar),
  *   - beim Öffnen einer Anzeige oder einer Bestandsliste (ohne zusätzliche Anfrage),
  *   - optional: unbekannte Anzeigen der Übersicht im Hintergrund prüfen (aus, weil
@@ -37,22 +39,24 @@
  * 1. Übersicht (Suchergebnisse, /s-...):
  *    Anzeigen blockierter Anbieter und einzeln ausgeblendete Anzeigen werden
  *    eingeklappt (Hinweiszeile) oder ganz ausgeblendet. Neben dem Preis sitzt ein
- *    "Ausblenden"-Button mit einem kleinen Menü.
- * 2. Anzeigenseite (/s-anzeige/...): Button "Blockieren" am Anbieter, Hinweis bei
- *    blockierten Anbietern.
+ *    "Ausblenden"-Button mit einem kleinen Menü, unten links der Button "Blockliste".
+ * 2. Anzeigenseite (/s-anzeige/...): Button "Blockieren" am Anbieter-Namen und fest
+ *    unten links, Hinweisleiste bei blockierten Anbietern.
  * 3. Bestandsliste (/s-bestandsliste.html): Leiste zum Blockieren/Freigeben.
+ *
+ * Kleinanzeigen baut Teile der Seite nach dem Laden neu auf. Das Script beobachtet
+ * die Seite und setzt fehlende Buttons, Hinweise und Styles wieder ein.
  *
  * Die Blockliste lässt sich als JSON oder als Textliste (ähnlich einer Filterliste)
  * exportieren und importieren. Das Format ist im README beschrieben.
  *
- * Hinweis: Kleinanzeigen ändert das Frontend häufig. Alle Selektoren und Grenzwerte
- * stehen gesammelt in CONFIG.
+ * Alle Selektoren und Grenzwerte stehen gesammelt in CONFIG.
  */
 
 (function () {
     'use strict';
 
-    const VERSION = '0.1.4';
+    const VERSION = '0.1.5';
 
     const CONFIG = {
         keys: {
@@ -85,8 +89,8 @@
         sellerUrl: (id) => id.startsWith('pro:')
             ? `/pro/${encodeURIComponent(id.slice(4))}`
             : `/s-bestandsliste.html?userId=${encodeURIComponent(id)}`,
-        // Bereiche der Anzeigenseite, in denen der Anbieter steht (in dieser Reihenfolge)
-        // (gewerbliche Anbieter: #viewad-bizteaser mit Links auf /pro/<Shop>, Stand 10/2026)
+        // Bereiche der Anzeigenseite, in denen der Anbieter steht (in dieser Reihenfolge;
+        // gewerbliche Anbieter: #viewad-bizteaser, Stand 10/2026)
         sellerContainers: ['#viewad-contact', '#viewad-profile-box', '#viewad-bizteaser', '.userprofile-vip', '#viewad-sidebar', 'aside'],
         // Linktexte, die kein Anbietername sind
         notAName: /anzeigen|profil|bestandsliste|shop|mehr|folgen/i,
@@ -149,18 +153,28 @@
     function normalizeUserId(raw) {
         if (raw == null) return null;
         const s = String(raw).trim();
-        const fromLink = userIdFromHref(s) || userIdFromHref(s.replace(/^https:\/\/www\.kleinanzeigen\.de/, ''));
+        const fromLink = userIdFromHref(s);
         if (fromLink) return fromLink;
-        let m = s.match(/[?&]userId=(\d{1,15})(?!\d)/);
+        const m = s.match(/[?&]userId=(\d{1,15})(?!\d)/);
         if (m) return m[1];
         return ID_RE.test(s) ? s.toLowerCase() : null;
+    }
+
+    const isShop = (id) => id.startsWith('pro:');
+    const sellerPageName = (id) => (isShop(id) ? 'Shop-Seite' : 'Bestandsliste');
+
+    // Hinweisfeld (<p class="kua-note">) setzen; ohne Text wird es ausgeblendet
+    function setNote(node, msg, kind) {
+        node.hidden = !msg;
+        node.textContent = msg || '';
+        if (kind) node.dataset.kind = kind; else delete node.dataset.kind;
     }
 
     function userLabel(id, fallbackName) {
         const u = state.users[id];
         const name = (u && u.name) || fallbackName;
         if (name) return name;
-        return id.startsWith('pro:') ? `Shop ${id.slice(4)}` : `Nutzer ${id}`;
+        return isShop(id) ? `Shop ${id.slice(4)}` : `Nutzer ${id}`;
     }
 
     function el(tag, props = {}, ...children) {
@@ -217,13 +231,13 @@
         }
     }
 
-    function cleanUser(u, fallbackAdded) {
+    function cleanUser(u) {
         const o = isObj(u) ? u : {};
         const added = typeof o.added === 'number' ? o.added : Date.parse(o.added);
         return {
             name: clip(o.name, CONFIG.nameMax),
             note: clip(o.note, CONFIG.noteMax),
-            added: Number.isFinite(added) ? added : (fallbackAdded || Date.now()),
+            added: Number.isFinite(added) ? added : Date.now(),
         };
     }
 
@@ -340,7 +354,7 @@
         }
         // Rückfall: im ganzen Dokument genau ein Anbieter-Link (Bestandsliste vor Shop)
         const all = collect(doc);
-        const regular = all.filter(e => !e.id.startsWith('pro:'));
+        const regular = all.filter(e => !isShop(e.id));
         if (regular.length === 1) return regular[0];
         if (!regular.length && all.length === 1) return all[0];
         return null;
@@ -402,7 +416,7 @@
         return null;
     }
 
-    // Bestandsliste eines Anbieters laden und seine Anzeigen im Index vermerken
+    // Bestandsliste bzw. Shop-Seite eines Anbieters laden und seine Anzeigen im Index vermerken
     const scanning = new Set();
 
     async function scanSeller(userId) {
@@ -442,7 +456,7 @@
                 await scanSeller(id);
                 refreshPage();
             } catch (e) {
-                console.warn('[Nutzer ausblenden] Bestandsliste nicht geladen:', id, e);
+                console.warn(`[Nutzer ausblenden] ${sellerPageName(id)} nicht geladen:`, id, e);
             }
             await sleep(CONFIG.requestGapMs);
         }
@@ -459,16 +473,15 @@
         saveUsers();
         refreshPage();
         const label = userLabel(id);
-        showToast(`„${label}“ blockiert.`, 'ok', [
-            { label: 'Rückgängig', onClick: () => { unblockUser(id); hideToast(); } },
-        ], 8000);
+        const undo = { label: 'Rückgängig', onClick: () => { unblockUser(id); hideToast(); } };
+        showToast(`„${label}“ blockiert.`, 'ok', [undo], 8000);
         scanSeller(id).then(n => {
             refreshPage();
-            if (state.users[id]) showToast(`„${label}“ blockiert, ${n} Anzeige${n === 1 ? '' : 'n'} in der Bestandsliste gefunden.`, 'ok', [
-                { label: 'Rückgängig', onClick: () => { unblockUser(id); hideToast(); } },
-            ], 6000);
+            if (state.users[id]) {
+                showToast(`„${label}“ blockiert, ${n} Anzeige${n === 1 ? '' : 'n'} auf der ${sellerPageName(id)} gefunden.`, 'ok', [undo], 6000);
+            }
         }).catch(e => {
-            console.warn('[Nutzer ausblenden] Bestandsliste nicht geladen:', id, e);
+            console.warn(`[Nutzer ausblenden] ${sellerPageName(id)} nicht geladen:`, id, e);
         });
     }
 
@@ -728,19 +741,13 @@
         const status = el('p', { className: 'kua-note', role: 'status', hidden: true });
         let resolving = false;
 
-        const showStatus = (msg, kind) => {
-            status.hidden = !msg;
-            status.textContent = msg || '';
-            if (kind) status.dataset.kind = kind; else delete status.dataset.kind;
-        };
-
         const render = () => {
             if (!pop || pop.root !== root) return;
             const uid = info.userId;
             const blocked = uid && state.users[uid];
             const adHidden = info.adId && state.ads[info.adId];
             const sellerText = uid
-                ? `Anbieter: ${userLabel(uid, info.sellerName)}${uid.startsWith('pro:') ? '' : ` (ID ${uid})`}`
+                ? `Anbieter: ${userLabel(uid, info.sellerName)}${isShop(uid) ? ' (Shop)' : ` (ID ${uid})`}`
                 : resolving ? 'Anbieter wird ermittelt …' : 'Anbieter unbekannt';
 
             const parts = [el('p', { className: 'kua-muted' }, sellerText)];
@@ -789,12 +796,12 @@
                     info.sellerName = seller.name;
                     refreshPage();
                 } else {
-                    showStatus('Der Anbieter ließ sich auf der Anzeigenseite nicht erkennen. Du kannst die Anzeige trotzdem einzeln ausblenden.', 'error');
+                    setNote(status, 'Der Anbieter ließ sich auf der Anzeigenseite nicht erkennen. Du kannst die Anzeige trotzdem einzeln ausblenden.', 'error');
                 }
                 render();
             }).catch(() => {
                 resolving = false;
-                showStatus('Die Anzeigenseite konnte nicht geladen werden. Du kannst die Anzeige trotzdem einzeln ausblenden.', 'error');
+                setNote(status, 'Die Anzeigenseite konnte nicht geladen werden. Du kannst die Anzeige trotzdem einzeln ausblenden.', 'error');
                 render();
             });
         }
@@ -1165,7 +1172,7 @@
 
     // Liest JSON- oder Textlisten. Liefert { title, users: [{id,name,note,added}], ads: [], invalid }
     function parseList(input) {
-        const text = String(input || '').replace(/^﻿/, '').trim();
+        const text = String(input || '').replace(/^\uFEFF/, '').trim();
         const out = { title: '', users: [], ads: [], invalid: 0 };
         const addUser = (raw) => {
             const entry = typeof raw === 'string' ? { id: raw } : raw;
@@ -1299,21 +1306,17 @@
         Object.values(state.index).forEach(uid => { if (state.users[uid]) adCounts[uid] = (adCounts[uid] || 0) + 1; });
 
         // --- Anbieter hinzufügen
-        const addId = el('input', { className: 'kua-input', type: 'text', placeholder: 'Nutzer-ID oder Link zur Bestandsliste', 'aria-label': 'Nutzer-ID oder Link' });
+        const addId = el('input', { className: 'kua-input', type: 'text', placeholder: 'Nutzer-ID oder Link zum Anbieter', 'aria-label': 'Nutzer-ID oder Link zum Anbieter' });
         const addName = el('input', { className: 'kua-input', type: 'text', maxLength: CONFIG.nameMax, placeholder: 'Name (optional)', 'aria-label': 'Name' });
         const addStatus = el('p', { className: 'kua-note', role: 'status', hidden: true });
         const doAdd = () => {
             const id = normalizeUserId(addId.value);
             if (!id) {
-                addStatus.hidden = false;
-                addStatus.dataset.kind = 'error';
-                addStatus.textContent = 'Keine gültige Nutzer-ID. Erwartet wird z. B. 12345678 oder ein Link wie …/s-bestandsliste.html?userId=12345678.';
+                setNote(addStatus, 'Keine gültige Nutzer-ID. Erwartet wird z. B. 12345678, ein Link wie …/s-bestandsliste.html?userId=12345678 oder ein Shop-Link wie …/pro/shop-name.', 'error');
                 return;
             }
             if (state.users[id]) {
-                addStatus.hidden = false;
-                addStatus.dataset.kind = 'ok';
-                addStatus.textContent = `„${userLabel(id)}“ ist bereits blockiert.`;
+                setNote(addStatus, `„${userLabel(id)}“ ist bereits blockiert.`, 'ok');
                 return;
             }
             blockUser(id, addName.value, '');
@@ -1340,8 +1343,8 @@
                         el('div', { className: 'kua-user-main' },
                             el('a', { href: CONFIG.sellerUrl(id), target: '_blank', rel: 'noopener' }, userLabel(id)),
                             el('span', { className: 'kua-muted' },
-                                `${id.startsWith('pro:') ? 'Shop' : 'ID ' + id} · seit ${fmtDate(u.added)} · ${known} bekannte Anzeige${known === 1 ? '' : 'n'}`
-                                + (state.scanned[id] ? ` · Bestandsliste geprüft ${fmtDate(state.scanned[id])}` : '')),
+                                `${isShop(id) ? 'Shop' : 'ID ' + id} · seit ${fmtDate(u.added)} · ${known} bekannte Anzeige${known === 1 ? '' : 'n'}`
+                                + (state.scanned[id] ? ` · ${sellerPageName(id)} geprüft ${fmtDate(state.scanned[id])}` : '')),
                             noteInput),
                         el('button', { type: 'button', className: 'kua-action', dataset: { danger: '' },
                             onclick: () => { unblockUser(id); renderPanel(); } }, 'Freigeben'));
@@ -1369,11 +1372,7 @@
             placeholder: 'Liste hier einfügen (JSON oder eine Nutzer-ID pro Zeile)', 'aria-label': 'Liste zum Importieren' });
         const replaceBox = el('input', { type: 'checkbox' });
         const ioStatus = el('p', { className: 'kua-note', role: 'status', hidden: true });
-        const showIo = (msg, kind) => {
-            ioStatus.hidden = false;
-            ioStatus.textContent = msg;
-            if (kind) ioStatus.dataset.kind = kind; else delete ioStatus.dataset.kind;
-        };
+        const showIo = (msg, kind) => setNote(ioStatus, msg, kind);
         const runImport = (text) => {
             let list;
             try { list = parseList(text); } catch (e) { showIo(e.message, 'error'); return; }
@@ -1386,7 +1385,7 @@
             renderPanel();
             showPanelNote(`Import${list.title ? ` „${list.title}“` : ''}: ${r.added} neu, ${r.existing} bereits vorhanden`
                 + `${r.ads ? `, ${r.ads} einzelne Anzeigen` : ''}${list.invalid ? `, ${list.invalid} ungültig übersprungen` : ''}.`
-                + (r.added ? ' Die Bestandslisten der neuen Anbieter werden nach und nach geladen.' : ''), 'ok');
+                + (r.added ? ' Die Anzeigen der neuen Anbieter werden nach und nach eingelesen.' : ''), 'ok');
             if (r.added) refreshBlockedSellers().then(() => renderPanel());
         };
         const fileInput = el('input', { type: 'file', accept: '.json,.txt,application/json,text/plain', hidden: true,
@@ -1423,7 +1422,7 @@
                 modeRadio('collapse', 'Einklappen: eine Hinweiszeile bleibt stehen (mit „Kurz zeigen“ und „Freigeben“)'),
                 modeRadio('hide', 'Ganz ausblenden: die Anzeige verschwindet aus der Liste'),
                 el('h3', {}, 'Erkennung'),
-                checkbox('dailyRefresh', 'Bestandslisten blockierter Anbieter einmal täglich neu laden, damit auch neue Anzeigen erkannt werden (empfohlen)'),
+                checkbox('dailyRefresh', 'Bestandslisten bzw. Shop-Seiten blockierter Anbieter einmal täglich neu einlesen, damit auch neue Anzeigen erkannt werden (empfohlen)'),
                 checkbox('autoResolve', 'Unbekannte Anzeigen der Übersicht im Hintergrund prüfen (lädt dafür bis zu 30 Anzeigenseiten pro Seitenaufruf)')),
             el('section', { className: 'kua-section' },
                 el('h3', {}, 'Export und Import'),
@@ -1457,9 +1456,7 @@
         panel.note = { msg, kind };
         const slot = panel.box.querySelector('[data-slot="note"]');
         if (!slot) return;
-        slot.hidden = false;
-        slot.textContent = msg;
-        if (kind) slot.dataset.kind = kind;
+        setNote(slot, msg, kind);
         panel.box.scrollTop = 0;
     }
 
