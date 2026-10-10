@@ -6,7 +6,7 @@
 
 **Eine eigene Blockliste für Kleinanzeigen.de: Anzeigen von Anbietern, die du blockierst, verschwinden aus deinen Suchergebnissen.**
 
-[![Version](https://img.shields.io/badge/version-0.1.0-blue?style=flat-square)](https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js)
+[![Version](https://img.shields.io/badge/version-0.1.1-blue?style=flat-square)](https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js)
 [![Plattform](https://img.shields.io/badge/plattform-Kleinanzeigen.de-green?style=flat-square)](https://www.kleinanzeigen.de)
 [![Userscript](https://img.shields.io/badge/Tampermonkey-Violentmonkey-black?style=flat-square&logo=tampermonkey)](#%EF%B8%8F-installation)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
@@ -163,6 +163,7 @@ Bitte **keine** Cookies, Tokens oder persönlichen Daten mitschicken.
 
 | Version | Änderungen |
 |---|---|
+| **0.1.1** | Button auf der Anzeigenseite verschwand kurz nach dem Laden: Wird der Anbieter-Kasten von der Seite neu aufgebaut, setzt das Script den Button wieder ein. Ebenso für Buttons und Hinweiszeilen in den Suchergebnissen |
 | **0.1.0** | Erste Version: Anbieter blockieren, einzelne Anzeigen ausblenden, Einklappen oder ganz Ausblenden, Verwaltung mit Notizen, Export und Import (JSON und Textliste), Anzeigen-Index mit täglicher Aktualisierung der Bestandslisten |
 
 ---

@@ -5,7 +5,7 @@
 // @author        RainbowlabsInc
 // @copyright     2026, RainbowlabsInc
 // @license       MIT
-// @version       0.1.0
+// @version       0.1.1
 // @icon          https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/assets/icon48.png
 // @homepage      https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden
 // @updateURL     https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js
@@ -52,7 +52,7 @@
 (function () {
     'use strict';
 
-    const VERSION = '0.1.0';
+    const VERSION = '0.1.1';
 
     const CONFIG = {
         keys: {
@@ -879,16 +879,25 @@
         const label = reason === 'user' ? userLabel(info.userId) : '';
         const sig = [mode, reason, info.userId, label].join('|');
 
-        // Button neben dem Preis (einmalig)
-        if (!card.querySelector(':scope .kua-wrap')) {
+        // Button neben dem Preis – erneut einsetzen, falls die Seite die Karte neu aufgebaut hat
+        const wrap = card.querySelector(':scope .kua-wrap');
+        if (!wrap) {
             const row = findPriceRow(card);
             if (row) {
                 row.classList.add('kua-price-row');
                 row.appendChild(el('span', { className: 'kua-ui kua-wrap' }, cardButton(info)));
             }
+        } else if (!wrap.parentElement.classList.contains('kua-price-row')) {
+            wrap.parentElement.classList.add('kua-price-row');
         }
 
-        if (card.dataset.kuaSig !== sig) {
+        // Neu zeichnen, wenn sich der Zustand geändert hat oder die Seite unsere Änderungen entfernt hat
+        const bar = card.querySelector(':scope > .kua-note-bar');
+        const intact = card.dataset.kuaSig === sig
+            && (card.dataset.kuaState || 'visible') === (mode === 'hidden' ? 'visible' : mode)
+            && !!bar === (mode === 'collapsed' || mode === 'revealed')
+            && hideTarget(card, info.adId).hasAttribute('data-kua-hidden') === (mode === 'hidden');
+        if (!intact) {
             card.dataset.kuaSig = sig;
             card.removeAttribute('data-kua-state');
             hideTarget(card, info.adId).removeAttribute('data-kua-hidden');
@@ -1049,6 +1058,20 @@
         const btn = guardedButton({ className: 'kua-ui kua-btn', style: 'margin-left:8px;vertical-align:middle',
             onclick: () => openPopover(info, btn) });
         seller.el.insertAdjacentElement('afterend', btn);
+
+        // Kleinanzeigen baut den Anbieter-Kasten nach dem Laden teils neu auf und
+        // entfernt dabei den Button. Dann wird er wieder am (neuen) Anbieter-Link eingesetzt.
+        let scheduled = false;
+        new MutationObserver(() => {
+            if (scheduled || btn.isConnected) return;
+            scheduled = true;
+            requestAnimationFrame(() => {
+                scheduled = false;
+                if (btn.isConnected) return;
+                const again = findSeller(document);
+                if (again && again.id === seller.id) again.el.insertAdjacentElement('afterend', btn);
+            });
+        }).observe(document.body, { childList: true, subtree: true });
 
         refreshPage = () => {
             closeStalePopover();
