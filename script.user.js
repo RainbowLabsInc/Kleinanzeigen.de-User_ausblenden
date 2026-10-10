@@ -5,7 +5,7 @@
 // @author        RainbowlabsInc
 // @copyright     2026, RainbowlabsInc
 // @license       MIT
-// @version       0.1.2
+// @version       0.1.3
 // @icon          https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/assets/icon48.png
 // @homepage      https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden
 // @updateURL     https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js
@@ -52,7 +52,7 @@
 (function () {
     'use strict';
 
-    const VERSION = '0.1.2';
+    const VERSION = '0.1.3';
 
     const CONFIG = {
         keys: {
@@ -86,7 +86,8 @@
             ? `/pro/${encodeURIComponent(id.slice(4))}`
             : `/s-bestandsliste.html?userId=${encodeURIComponent(id)}`,
         // Bereiche der Anzeigenseite, in denen der Anbieter steht (in dieser Reihenfolge)
-        sellerContainers: ['#viewad-contact', '#viewad-profile-box', '.userprofile-vip', '#viewad-sidebar', 'aside'],
+        // (gewerbliche Anbieter: #viewad-bizteaser mit Links auf /pro/<Shop>, Stand 10/2026)
+        sellerContainers: ['#viewad-contact', '#viewad-profile-box', '#viewad-bizteaser', '.userprofile-vip', '#viewad-sidebar', 'aside'],
         // Linktexte, die kein Anbietername sind
         notAName: /anzeigen|profil|bestandsliste|shop|mehr|folgen/i,
         // Ergebnisliste auf Such- und Bestandslisten-Seiten (Rückfall: größte Liste mit Anzeigen)
@@ -138,7 +139,8 @@
         let m = s.match(/s-bestandsliste\.html\?(?:[^#]*&)?userId=(\d{1,15})(?!\d)/);
         if (m) return m[1];
         m = s.match(/^(?:https:\/\/www\.kleinanzeigen\.de)?\/pro\/([a-z0-9][a-z0-9_-]{0,79})(?:[/?#]|$)/i);
-        if (m) return 'pro:' + m[1].toLowerCase();
+        // Schreibweise beibehalten: die Shop-Adresse wird später genau so wieder aufgerufen
+        if (m) return 'pro:' + m[1];
         return null;
     }
 
@@ -150,7 +152,7 @@
         if (fromLink) return fromLink;
         let m = s.match(/[?&]userId=(\d{1,15})(?!\d)/);
         if (m) return m[1];
-        return ID_RE.test(s) ? s.toLowerCase() : null;
+        return ID_RE.test(s) ? s.replace(/^pro:/i, 'pro:') : null;
     }
 
     function userLabel(id, fallbackName) {
