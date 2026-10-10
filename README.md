@@ -14,6 +14,8 @@
 
 *Chrome · Firefox · Edge · Kein eigener Server · Kein Tracking · Listen teilen, zusammenführen und abonnieren*
 
+<a href="https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js"><img src="assets/installieren.svg" alt="Installieren: Nutzer ausblenden (Tampermonkey)" width="320" height="60"></a>
+
 </div>
 
 ---
@@ -67,7 +69,7 @@ Manche Anbieter tauchen in jeder Suche wieder auf: mit Lockpreisen wie **„2 �
 
 **Schritt 2: Script installieren**
 
-[![Installieren](https://img.shields.io/badge/Installieren-Nutzer%20ausblenden-1e1e1e?style=for-the-badge&logo=tampermonkey)](https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js)
+<a href="https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js"><img src="assets/installieren.svg" alt="Installieren: Nutzer ausblenden (Tampermonkey)" width="320" height="60"></a>
 
 *(Alternativ: Inhalt von `script.user.js` kopieren und in Tampermonkey als neues Skript einfügen.)*
 
