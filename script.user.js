@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name          Kleinanzeigen - Nutzer ausblenden (Blockliste)
 // @namespace     https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden
-// @description   Blendet auf Kleinanzeigen.de Anzeigen von Nutzerinnen und Nutzern aus, die du blockierst. Eigene Blockliste mit Notizen, einzelne Anzeigen ausblenden, Export und Import der Liste.
+// @description   Blendet auf Kleinanzeigen.de Anzeigen von Nutzerinnen und Nutzern aus, die du blockierst. Eigene Blockliste mit Notizen, einzelne Anzeigen ausblenden, Listen exportieren und zusammenführen.
 // @author        RainbowlabsInc
 // @copyright     2026, RainbowlabsInc
 // @license       MIT
-// @version       0.1.5
+// @version       0.2.0
 // @icon          https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/assets/icon48.png
 // @homepage      https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden
 // @updateURL     https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js
@@ -48,7 +48,9 @@
  * die Seite und setzt fehlende Buttons, Hinweise und Styles wieder ein.
  *
  * Die Blockliste lässt sich als JSON oder als Textliste (ähnlich einer Filterliste)
- * exportieren und importieren. Das Format ist im README beschrieben.
+ * exportieren. Fremde Listen werden nach einer Vorschau mit der eigenen zusammengeführt;
+ * übernommene Einträge merken sich ihre Herkunft und lassen sich gemeinsam wieder
+ * freigeben. Das Format ist im README beschrieben.
  *
  * Alle Selektoren und Grenzwerte stehen gesammelt in CONFIG.
  */
@@ -56,11 +58,11 @@
 (function () {
     'use strict';
 
-    const VERSION = '0.1.5';
+    const VERSION = '0.2.0';
 
     const CONFIG = {
         keys: {
-            users: 'kua-users',          // { <userId>: { name, note, added } }
+            users: 'kua-users',          // { <userId>: { name, note, added, source? } }
             ads: 'kua-hidden-ads',       // { <adId>: <Zeitstempel> } einzeln ausgeblendete Anzeigen
             index: 'kua-ad-index',       // { <adId>: <userId> } bekannte Zuordnung Anzeige -> Anbieter
             scanned: 'kua-scanned',      // { <userId>: <Zeitstempel> } letzte geladene Bestandsliste
@@ -85,6 +87,7 @@
         autoResolveMax: 30,
         nameMax: 80,
         noteMax: 300,
+        sourceMax: 80,
         // Link zur Bestandsliste bzw. zum Shop (Stand 10/2026)
         sellerUrl: (id) => id.startsWith('pro:')
             ? `/pro/${encodeURIComponent(id.slice(4))}`
@@ -231,14 +234,18 @@
         }
     }
 
+    // source: Name der Liste, aus der ein Eintrag übernommen wurde (fehlt bei eigenen Einträgen)
     function cleanUser(u) {
         const o = isObj(u) ? u : {};
         const added = typeof o.added === 'number' ? o.added : Date.parse(o.added);
-        return {
+        const user = {
             name: clip(o.name, CONFIG.nameMax),
             note: clip(o.note, CONFIG.noteMax),
             added: Number.isFinite(added) ? added : Date.now(),
         };
+        const source = clip(o.source, CONFIG.sourceMax);
+        if (source) user.source = source;
+        return user;
     }
 
     function loadUsers() {
@@ -647,6 +654,13 @@
             .kua-user-main { flex: 1; min-width: 0; display: grid; gap: 4px; }
             .kua-user-main a { font-weight: 600; color: inherit; overflow-wrap: anywhere; }
             .kua-user .kua-input { padding: 4px 8px; font-size: 13px; }
+            .kua-preview[hidden] { display: none; }
+            .kua-preview { display: grid; gap: 8px; padding: 10px; border: 1px solid #c9c7c2; border-radius: 8px; background: #faf9f7; }
+            .kua-pick-list { display: grid; gap: 2px; max-height: 240px; overflow: auto; padding: 4px; border: 1px solid #e3e1dc; border-radius: 8px; background: #fff; }
+            .kua-pick { padding: 4px 6px; border-radius: 6px; }
+            .kua-pick:hover { background: #f2f1ee; }
+            .kua-pick a { color: #555; font-size: 12px; }
+            .kua-sources { display: grid; gap: 4px; padding-top: 4px; }
         `;
         ensureStyles();
     }
@@ -1139,7 +1153,7 @@
     function exportJson() {
         const users = Object.entries(state.users)
             .sort((a, b) => a[1].added - b[1].added)
-            .map(([id, u]) => ({ id, name: u.name, note: u.note, added: new Date(u.added).toISOString() }));
+            .map(([id, u]) => ({ id, name: u.name, note: u.note, added: new Date(u.added).toISOString(), ...(u.source ? { source: u.source } : {}) }));
         return JSON.stringify({
             format: CONFIG.listFormat,
             version: CONFIG.listFormatVersion,
@@ -1170,19 +1184,28 @@
         return lines.join('\n') + '\n';
     }
 
-    // Liest JSON- oder Textlisten. Liefert { title, users: [{id,name,note,added}], ads: [], invalid }
+    // Liest JSON- oder Textlisten. Liefert { title, users: [{id,name,note,added,source?}], ads: [], invalid }.
+    // Mehrfach vorkommende Anbieter/Anzeigen werden nur einmal übernommen.
     function parseList(input) {
         const text = String(input || '').replace(/^\uFEFF/, '').trim();
         const out = { title: '', users: [], ads: [], invalid: 0 };
+        const seenUsers = new Set();
+        const seenAds = new Set();
+        const pushUser = (id, entry) => {
+            if (seenUsers.has(id)) return;
+            seenUsers.add(id);
+            out.users.push({ id, ...cleanUser(entry) });
+        };
         const addUser = (raw) => {
             const entry = typeof raw === 'string' ? { id: raw } : raw;
             const id = isObj(entry) ? normalizeUserId(entry.id) : null;
             if (!id) { out.invalid++; return; }
-            out.users.push({ id, ...cleanUser(entry) });
+            pushUser(id, entry);
         };
         const addAd = (raw) => {
             const adId = /^\d{1,15}$/.test(String(raw)) ? String(raw) : getAdIdFromUrl(raw);
-            if (adId) out.ads.push(adId); else out.invalid++;
+            if (!adId) { out.invalid++; return; }
+            if (!seenAds.has(adId)) { seenAds.add(adId); out.ads.push(adId); }
         };
 
         if (text.startsWith('{') || text.startsWith('[')) {
@@ -1214,30 +1237,36 @@
             if (adMatch || getAdIdFromUrl(token)) { addAd(adMatch ? adMatch[1] : token); continue; }
             const id = normalizeUserId(token);
             if (!id) { out.invalid++; continue; }
-            out.users.push({ id, ...cleanUser({ name: main.slice(token.length), note }) });
+            pushUser(id, { name: main.slice(token.length), note });
         }
         return out;
     }
 
-    function importList(list, replace) {
+    // Führt eine Liste mit der eigenen zusammen (oder ersetzt sie).
+    // opts: { replace, selected: Set der zu übernehmenden IDs, includeAds, source }
+    // Vorhandene Einträge bleiben unverändert; nur leerer Name/leere Notiz werden ergänzt.
+    function importList(list, opts = {}) {
         const result = { added: 0, existing: 0, ads: 0 };
-        if (replace) {
+        if (opts.replace) {
             state.users = {};
             state.ads = {};
         }
+        const source = clip(opts.source, CONFIG.sourceMax);
         for (const u of list.users) {
             const cur = state.users[u.id];
             if (cur) {
                 result.existing++;
                 if (!cur.name && u.name) cur.name = u.name;
                 if (!cur.note && u.note) cur.note = u.note;
-            } else {
-                state.users[u.id] = { name: u.name, note: u.note, added: u.added };
+            } else if (!opts.selected || opts.selected.has(u.id)) {
+                state.users[u.id] = cleanUser({ ...u, source: source || u.source });
                 result.added++;
             }
         }
-        for (const adId of list.ads) {
-            if (!state.ads[adId]) { state.ads[adId] = Date.now(); result.ads++; }
+        if (opts.includeAds !== false) {
+            for (const adId of list.ads) {
+                if (!state.ads[adId]) { state.ads[adId] = Date.now(); result.ads++; }
+            }
         }
         saveUsers();
         saveAds();
@@ -1273,7 +1302,7 @@
     // Verwaltung (Dialog)
     // ------------------------------------------------------------------
 
-    let panel = null; // { overlay, box, note, cleanup }
+    let panel = null; // { overlay, box, note, preview, cleanup }
 
     function closePanel() {
         if (!panel) return;
@@ -1290,7 +1319,7 @@
         overlay.addEventListener('pointerdown', e => { if (e.target === overlay) closePanel(); });
         const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); closePanel(); } };
         document.addEventListener('keydown', onKey, true);
-        panel = { overlay, box, note: null, cleanup: () => document.removeEventListener('keydown', onKey, true) };
+        panel = { overlay, box, note: null, preview: null, cleanup: () => document.removeEventListener('keydown', onKey, true) };
         document.body.appendChild(overlay);
         renderPanel();
         const first = box.querySelector('input');
@@ -1332,7 +1361,7 @@
             const rows = ids
                 .filter(id => state.users[id])
                 .sort((a, b) => state.users[b].added - state.users[a].added)
-                .filter(id => !q || [id, state.users[id].name, state.users[id].note].join(' ').toLowerCase().includes(q))
+                .filter(id => !q || [id, state.users[id].name, state.users[id].note, state.users[id].source].join(' ').toLowerCase().includes(q))
                 .map(id => {
                     const u = state.users[id];
                     const noteInput = el('input', { className: 'kua-input', type: 'text', value: u.note, maxLength: CONFIG.noteMax,
@@ -1344,7 +1373,8 @@
                             el('a', { href: CONFIG.sellerUrl(id), target: '_blank', rel: 'noopener' }, userLabel(id)),
                             el('span', { className: 'kua-muted' },
                                 `${isShop(id) ? 'Shop' : 'ID ' + id} · seit ${fmtDate(u.added)} · ${known} bekannte Anzeige${known === 1 ? '' : 'n'}`
-                                + (state.scanned[id] ? ` · ${sellerPageName(id)} geprüft ${fmtDate(state.scanned[id])}` : '')),
+                                + (state.scanned[id] ? ` · ${sellerPageName(id)} geprüft ${fmtDate(state.scanned[id])}` : '')
+                                + (u.source ? ` · aus „${u.source}“` : '')),
                             noteInput),
                         el('button', { type: 'button', className: 'kua-action', dataset: { danger: '' },
                             onclick: () => { unblockUser(id); renderPanel(); } }, 'Freigeben'));
@@ -1367,36 +1397,140 @@
             el('input', { type: 'checkbox', checked: state.settings[key], onchange: (e) => setting(key, e.target.checked) }),
             el('span', {}, text));
 
-        // --- Import / Export
+        // --- Liste hinzufügen: erst prüfen (Vorschau mit Auswahl), dann zusammenführen
         const importText = el('textarea', { className: 'kua-input', rows: 4, spellcheck: false,
-            placeholder: 'Liste hier einfügen (JSON oder eine Nutzer-ID pro Zeile)', 'aria-label': 'Liste zum Importieren' });
-        const replaceBox = el('input', { type: 'checkbox' });
+            placeholder: 'Liste hier einfügen (JSON oder eine Nutzer-ID pro Zeile)', 'aria-label': 'Liste zum Hinzufügen' });
         const ioStatus = el('p', { className: 'kua-note', role: 'status', hidden: true });
         const showIo = (msg, kind) => setNote(ioStatus, msg, kind);
-        const runImport = (text) => {
+        const startPreview = (text, fallbackTitle) => {
             let list;
             try { list = parseList(text); } catch (e) { showIo(e.message, 'error'); return; }
             if (!list.users.length && !list.ads.length) {
                 showIo(`Keine Einträge gefunden${list.invalid ? ` (${list.invalid} ungültige Zeilen)` : ''}.`, 'error');
                 return;
             }
-            if (replaceBox.checked && !window.confirm('Die bisherige Blockliste wird vollständig ersetzt. Fortfahren?')) return;
-            const r = importList(list, replaceBox.checked);
+            panel.preview = {
+                list,
+                source: list.title || fallbackTitle || 'Importierte Liste',
+                selected: new Set(list.users.filter(u => !state.users[u.id]).map(u => u.id)),
+                includeAds: true,
+                replace: false,
+            };
+            panel.note = null;
             renderPanel();
-            showPanelNote(`Import${list.title ? ` „${list.title}“` : ''}: ${r.added} neu, ${r.existing} bereits vorhanden`
-                + `${r.ads ? `, ${r.ads} einzelne Anzeigen` : ''}${list.invalid ? `, ${list.invalid} ungültig übersprungen` : ''}.`
-                + (r.added ? ' Die Anzeigen der neuen Anbieter werden nach und nach eingelesen.' : ''), 'ok');
-            if (r.added) refreshBlockedSellers().then(() => renderPanel());
+            const target = panel.box.querySelector('.kua-preview');
+            if (target) target.scrollIntoView({ block: 'nearest' });
         };
         const fileInput = el('input', { type: 'file', accept: '.json,.txt,application/json,text/plain', hidden: true,
             onchange: async (e) => {
                 const file = e.target.files && e.target.files[0];
                 if (!file) return;
                 if (file.size > 2 * 1024 * 1024) { showIo('Die Datei ist zu groß (max. 2 MB).', 'error'); return; }
-                runImport(await file.text());
+                startPreview(await file.text(), file.name.replace(/\.(json|txt)$/i, ''));
                 e.target.value = '';
             } });
+
+        const previewBox = el('div', { className: 'kua-preview', hidden: true });
+        const drawPreview = () => {
+            const pv = panel.preview;
+            previewBox.hidden = !pv;
+            if (!pv) { previewBox.replaceChildren(); return; }
+            const { list } = pv;
+            // Beim Hinzufügen nur Anbieter zur Auswahl stellen, die noch nicht in der Liste sind
+            const candidates = pv.replace ? list.users : list.users.filter(u => !state.users[u.id]);
+            const known = list.users.length - candidates.length;
+            const summary = `${list.title ? `„${list.title}“: ` : ''}${list.users.length} Anbieter`
+                + (pv.replace ? '' : ` (${candidates.length} neu, ${known} schon in deiner Liste)`)
+                + (list.ads.length ? `, ${list.ads.length} einzelne Anzeige${list.ads.length === 1 ? '' : 'n'}` : '')
+                + (list.invalid ? `, ${list.invalid} ungültige Zeile${list.invalid === 1 ? '' : 'n'} übersprungen` : '') + '.';
+
+            const mergeBtn = el('button', { type: 'button', className: 'kua-action', dataset: { primary: '' } });
+            const updateMergeBtn = () => {
+                const n = candidates.filter(u => pv.selected.has(u.id)).length;
+                mergeBtn.textContent = pv.replace ? `Liste ersetzen (${n} Anbieter)` : `${n} Anbieter hinzufügen`;
+                mergeBtn.disabled = !n && !(pv.includeAds && list.ads.length);
+            };
+            const select = (all) => {
+                candidates.forEach(u => (all ? pv.selected.add(u.id) : pv.selected.delete(u.id)));
+                drawPreview();
+            };
+            const rows = candidates.map(u => el('label', { className: 'kua-check kua-pick' },
+                el('input', { type: 'checkbox', checked: pv.selected.has(u.id),
+                    onchange: (e) => { if (e.target.checked) pv.selected.add(u.id); else pv.selected.delete(u.id); updateMergeBtn(); } }),
+                el('span', {},
+                    el('strong', {}, userLabel(u.id, u.name)),
+                    ` · ${isShop(u.id) ? 'Shop' : 'ID ' + u.id}${u.note ? ` · ${u.note}` : ''} `,
+                    el('a', { href: CONFIG.sellerUrl(u.id), target: '_blank', rel: 'noopener' }, 'ansehen'))));
+            const modeRadio = (replace, text) => el('label', { className: 'kua-check' },
+                el('input', { type: 'radio', name: 'kua-merge-mode', checked: pv.replace === replace,
+                    onchange: () => {
+                        pv.replace = replace;
+                        pv.selected = new Set((replace ? list.users : list.users.filter(u => !state.users[u.id])).map(u => u.id));
+                        drawPreview();
+                    } }),
+                el('span', {}, text));
+
+            mergeBtn.addEventListener('click', () => {
+                if (pv.replace && !window.confirm('Deine bisherige Blockliste wird vollständig durch diese Liste ersetzt. Fortfahren?')) return;
+                const r = importList(list, { replace: pv.replace, selected: pv.selected, includeAds: pv.includeAds,
+                    source: pv.replace ? '' : pv.source });
+                panel.preview = null;
+                renderPanel();
+                const name = pv.replace ? list.title : (clip(pv.source, CONFIG.sourceMax) || list.title);
+                showPanelNote(`${pv.replace ? 'Liste ersetzt' : 'Liste zusammengeführt'}${name ? ` („${name}“)` : ''}: `
+                    + `${r.added} Anbieter hinzugefügt${r.existing ? `, ${r.existing} ${r.existing === 1 ? 'war' : 'waren'} schon in deiner Liste` : ''}`
+                    + `${r.ads ? `, ${r.ads} einzelne Anzeige${r.ads === 1 ? '' : 'n'}` : ''}.`
+                    + (r.added ? ` Die Anzeigen der neuen Anbieter werden nach und nach eingelesen (bis zu ${CONFIG.refreshPerVisit} Anbieter pro Seitenaufruf).` : ''), 'ok');
+                if (r.added) refreshBlockedSellers().then(() => renderPanel());
+            });
+
+            previewBox.replaceChildren(
+                el('p', { className: 'kua-note' }, summary),
+                modeRadio(false, 'Zu meiner Liste hinzufügen (empfohlen): deine Einträge bleiben, nur neue Anbieter kommen dazu'),
+                modeRadio(true, 'Meine Liste ersetzen: die bisherige Blockliste wird gelöscht'),
+                pv.replace ? null : el('label', { className: 'kua-field' },
+                    el('span', {}, 'Herkunft (wird bei den neuen Einträgen vermerkt, damit du sie später gemeinsam entfernen kannst)'),
+                    el('input', { className: 'kua-input', type: 'text', value: pv.source, maxLength: CONFIG.sourceMax,
+                        oninput: (e) => { pv.source = e.target.value; } })),
+                candidates.length ? el('div', { className: 'kua-row' },
+                    el('span', { className: 'kua-spacer kua-muted' }, pv.replace ? 'Anbieter der Liste' : 'Neue Anbieter'),
+                    el('button', { type: 'button', className: 'kua-link', onclick: () => select(true) }, 'Alle'),
+                    el('button', { type: 'button', className: 'kua-link', onclick: () => select(false) }, 'Keine')) : null,
+                candidates.length ? el('div', { className: 'kua-pick-list' }, rows)
+                    : el('p', { className: 'kua-hint' }, 'Alle Anbieter dieser Liste sind schon in deiner Liste.'),
+                list.ads.length ? el('label', { className: 'kua-check' },
+                    el('input', { type: 'checkbox', checked: pv.includeAds, onchange: (e) => { pv.includeAds = e.target.checked; updateMergeBtn(); } }),
+                    el('span', {}, `${list.ads.length} einzeln ausgeblendete Anzeige${list.ads.length === 1 ? '' : 'n'} übernehmen`)) : null,
+                el('div', { className: 'kua-row' },
+                    el('span', { className: 'kua-spacer' }),
+                    el('button', { type: 'button', className: 'kua-action', onclick: () => { panel.preview = null; drawPreview(); } }, 'Abbrechen'),
+                    mergeBtn));
+            updateMergeBtn();
+        };
+        drawPreview();
+
+        // --- Übernommene Listen (Herkunft) mit "Alle freigeben"
+        const sources = {};
+        ids.forEach(id => { const src = state.users[id].source; if (src) sources[src] = (sources[src] || 0) + 1; });
+        const removeSource = (src) => {
+            let n = 0;
+            Object.keys(state.users).forEach(id => { if (state.users[id].source === src) { delete state.users[id]; n++; } });
+            saveUsers();
+            refreshPage();
+            renderPanel();
+            showPanelNote(`${n} Anbieter aus „${src}“ freigegeben.`, 'ok');
+        };
+        const sourcesBox = Object.keys(sources).length ? el('div', { className: 'kua-sources' },
+            el('span', { className: 'kua-muted' }, 'Übernommene Listen:'),
+            Object.entries(sources).sort((a, b) => b[1] - a[1]).map(([src, n]) => el('div', { className: 'kua-row' },
+                el('span', { className: 'kua-spacer' }, `„${src}“ · ${n} Anbieter`),
+                el('button', { type: 'button', className: 'kua-action', dataset: { danger: '' },
+                    onclick: () => {
+                        if (!window.confirm(`Alle ${n} Anbieter aus „${src}“ freigeben? Deine eigenen Einträge bleiben erhalten.`)) return;
+                        removeSource(src);
+                    } }, 'Alle freigeben')))) : null;
         const stamp = new Date().toISOString().slice(0, 10);
+        const exportStatus = el('p', { className: 'kua-note', role: 'status', hidden: true });
 
         const body = el('div', { className: 'kua-body' },
             el('div', { className: 'kua-note', role: 'status', hidden: !panel.note, dataset: panel.note && panel.note.kind ? { slot: 'note', kind: panel.note.kind } : { slot: 'note' } },
@@ -1407,7 +1541,8 @@
                     el('button', { type: 'button', className: 'kua-action', dataset: { primary: '' }, onclick: doAdd }, 'Blockieren')),
                 addStatus,
                 ids.length > 5 ? filter : null,
-                listBox),
+                listBox,
+                sourcesBox),
             el('section', { className: 'kua-section' },
                 el('h3', {}, 'Einzeln ausgeblendete Anzeigen'),
                 el('div', { className: 'kua-row' },
@@ -1425,23 +1560,27 @@
                 checkbox('dailyRefresh', 'Bestandslisten bzw. Shop-Seiten blockierter Anbieter einmal täglich neu einlesen, damit auch neue Anzeigen erkannt werden (empfohlen)'),
                 checkbox('autoResolve', 'Unbekannte Anzeigen der Übersicht im Hintergrund prüfen (lädt dafür bis zu 30 Anzeigenseiten pro Seitenaufruf)')),
             el('section', { className: 'kua-section' },
-                el('h3', {}, 'Export und Import'),
+                el('h3', {}, 'Liste hinzufügen (zusammenführen)'),
+                el('p', { className: 'kua-hint' }, 'Eine fremde oder eigene Liste (JSON oder Textliste) prüfen und mit deiner Blockliste zusammenführen. Vor dem Übernehmen siehst du, welche Anbieter neu dazukommen.'),
+                el('div', { className: 'kua-row' },
+                    el('button', { type: 'button', className: 'kua-action', onclick: () => fileInput.click() }, 'Datei wählen …'),
+                    fileInput),
+                importText,
+                el('div', { className: 'kua-row' },
+                    el('span', { className: 'kua-spacer' }),
+                    el('button', { type: 'button', className: 'kua-action', onclick: () => startPreview(importText.value, '') }, 'Eingefügte Liste prüfen')),
+                ioStatus,
+                previewBox),
+            el('section', { className: 'kua-section' },
+                el('h3', {}, 'Export'),
                 el('div', { className: 'kua-row' },
                     el('button', { type: 'button', className: 'kua-action',
                         onclick: () => download(`kleinanzeigen-blockliste-${stamp}.json`, exportJson(), 'application/json') }, 'Als JSON speichern'),
                     el('button', { type: 'button', className: 'kua-action',
                         onclick: () => download(`kleinanzeigen-blockliste-${stamp}.txt`, exportText(), 'text/plain') }, 'Als Textliste speichern'),
                     el('button', { type: 'button', className: 'kua-action',
-                        onclick: async () => showIo(await copyText(exportText()) ? 'Textliste in die Zwischenablage kopiert.' : 'Kopieren nicht möglich.', null) }, 'Kopieren')),
-                el('div', { className: 'kua-row' },
-                    el('button', { type: 'button', className: 'kua-action', onclick: () => fileInput.click() }, 'Datei importieren …'),
-                    fileInput,
-                    el('label', { className: 'kua-check' }, replaceBox, el('span', {}, 'Bisherige Liste ersetzen statt ergänzen'))),
-                importText,
-                el('div', { className: 'kua-row' },
-                    el('span', { className: 'kua-spacer' }),
-                    el('button', { type: 'button', className: 'kua-action', onclick: () => runImport(importText.value) }, 'Eingefügte Liste importieren')),
-                ioStatus,
+                        onclick: async () => setNote(exportStatus, await copyText(exportText()) ? 'Textliste in die Zwischenablage kopiert.' : 'Kopieren nicht möglich.') }, 'Kopieren')),
+                exportStatus,
                 el('p', { className: 'kua-hint' }, 'Gespeichert wird nur lokal in deinem Browser bzw. in deinem Userscript-Manager. Es werden keine Daten an fremde Server gesendet.')),
             el('p', { className: 'kua-hint' }, `Nutzer ausblenden ${VERSION} · `,
                 el('a', { href: 'https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden', target: '_blank', rel: 'noopener' }, 'Projektseite')));
