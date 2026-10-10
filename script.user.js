@@ -5,7 +5,7 @@
 // @author        RainbowlabsInc
 // @copyright     2026, RainbowlabsInc
 // @license       MIT
-// @version       0.3.0
+// @version       0.3.1
 // @icon          https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/assets/icon48.png
 // @homepage      https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden
 // @updateURL     https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js
@@ -64,7 +64,7 @@
 (function () {
     'use strict';
 
-    const VERSION = '0.3.0';
+    const VERSION = '0.3.1';
 
     const CONFIG = {
         keys: {
@@ -86,8 +86,8 @@
         refreshAfterMs: 24 * 60 * 60 * 1000,
         // ... aber pro Seitenaufruf höchstens so viele Anbieter
         refreshPerVisit: 3,
-        // Seiten pro Bestandsliste
-        scanMaxPages: 5,
+        // Seiten pro Bestandsliste bzw. Shop-Seite
+        scanMaxPages: 10,
         // Pause zwischen zwei Hintergrund-Anfragen
         requestGapMs: 1200,
         // Höchstens so viele Anzeigen pro Seitenaufruf im Hintergrund prüfen
@@ -111,8 +111,10 @@
         notAName: /anzeigen|profil|bestandsliste|shop|mehr|folgen/i,
         // Ergebnisliste auf Such- und Bestandslisten-Seiten (Rückfall: größte Liste mit Anzeigen)
         resultListSelectors: ['#srchrslt-adtable'],
-        // "Nächste Seite" in der Bestandsliste
+        // "Nächste Seite" in der Bestandsliste: Text, title/aria-label bzw. Klasse des Links
         nextPageText: /^(›|»|>|weiter|nächste)/i,
+        nextPageLabel: /nächste|weiter|next/i,
+        nextPageClass: /(^|[-_\s])next([-_\s]|$)/i,
         listFormat: 'kleinanzeigen-blockliste',
         listFormatVersion: 1,
     };
@@ -454,20 +456,45 @@
         return seller;
     }
 
-    function nextPageUrl(doc, userId, visited) {
-        const candidates = [
+    // Seitenzahl aus einer Adresse: ?pageNum=2 / ?page=2 / ?seite=2 oder .../seite:2/...
+    function pageNumber(url) {
+        for (const [k, v] of url.searchParams) {
+            if (/^(pagenum|page|seite)$/i.test(k) && /^\d+$/.test(v)) return Number(v);
+        }
+        const m = url.pathname.match(/\/seite:(\d+)(?:\/|$)/);
+        return m ? Number(m[1]) : 1;
+    }
+
+    // Adresse der nächsten Seite einer Bestandsliste/Shop-Seite, oder null.
+    // 1. ausgezeichneter "Weiter"-Link (rel="next", Text, title/aria-label, Klasse "…next…"),
+    // 2. sonst der Link mit der nächsthöheren Seitenzahl.
+    function nextPageUrl(doc, userId, visited, currentUrl) {
+        const toSellerUrl = (href) => {
+            if (!href) return null;
+            let url;
+            try { url = new URL(href, window.location.origin); } catch (e) { return null; }
+            if (url.origin !== window.location.origin || normalizeUserId(url.href) !== userId) return null;
+            return url;
+        };
+        const fresh = (url) => url && !visited.has(url.pathname + url.search);
+
+        const marked = [
             ...doc.querySelectorAll('link[rel="next"], a[rel="next"]'),
             ...Array.from(doc.querySelectorAll('a[href]')).filter(a =>
-                CONFIG.nextPageText.test(clip(a.textContent, 20)) || /nächste|weiter/i.test(a.getAttribute('aria-label') || '')),
+                CONFIG.nextPageText.test(clip(a.textContent, 20))
+                || CONFIG.nextPageLabel.test(a.getAttribute('aria-label') || '')
+                || CONFIG.nextPageLabel.test(a.getAttribute('title') || '')
+                || CONFIG.nextPageClass.test(a.getAttribute('class') || '')),
         ];
-        for (const a of candidates) {
-            const href = a.getAttribute('href');
-            if (!href) continue;
-            const url = new URL(href, window.location.origin);
-            if (url.origin !== window.location.origin) continue;
-            if (normalizeUserId(url.href) !== userId) continue;
-            const s = url.pathname + url.search;
-            if (!visited.has(s)) return s;
+        for (const a of marked) {
+            const url = toSellerUrl(a.getAttribute('href'));
+            if (fresh(url)) return url.pathname + url.search;
+        }
+
+        const current = pageNumber(new URL(currentUrl, window.location.origin));
+        for (const a of doc.querySelectorAll('a[href]')) {
+            const url = toSellerUrl(a.getAttribute('href'));
+            if (fresh(url) && pageNumber(url) === current + 1) return url.pathname + url.search;
         }
         return null;
     }
@@ -489,7 +516,7 @@
                 const ids = mainListAdIds(doc);
                 ids.forEach(adId => learn(adId, userId));
                 count += ids.length;
-                url = ids.length ? nextPageUrl(doc, userId, visited) : null;
+                url = ids.length ? nextPageUrl(doc, userId, visited, url) : null;
             }
             state.scanned[userId] = Date.now();
             saveScanned();
@@ -508,6 +535,8 @@
             .sort((a, b) => (state.scanned[a] || 0) - (state.scanned[b] || 0))
             .slice(0, CONFIG.refreshPerVisit);
         for (const id of due) {
+            // Inzwischen schon eingelesen (z. B. direkt nach dem Blockieren) oder freigegeben?
+            if (!state.users[id] || Date.now() - (state.scanned[id] || 0) <= CONFIG.refreshAfterMs) continue;
             try {
                 await scanSeller(id);
                 refreshPage();

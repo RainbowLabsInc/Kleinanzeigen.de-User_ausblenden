@@ -6,7 +6,7 @@
 
 **Eine eigene Blockliste für Kleinanzeigen.de: Anzeigen von Anbietern, die du blockierst, verschwinden aus deinen Suchergebnissen.**
 
-[![Version](https://img.shields.io/badge/version-0.3.0-blue?style=flat-square)](https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js)
+[![Version](https://img.shields.io/badge/version-0.3.1-blue?style=flat-square)](https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js)
 [![Plattform](https://img.shields.io/badge/plattform-Kleinanzeigen.de-green?style=flat-square)](https://www.kleinanzeigen.de)
 [![Userscript](https://img.shields.io/badge/Tampermonkey-Violentmonkey-black?style=flat-square&logo=tampermonkey)](#%EF%B8%8F-installation)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
@@ -125,7 +125,7 @@ Kleinanzeigen zeigt in den Suchergebnissen in der Regel nicht an, **wer** eine A
 | Situation | Was passiert |
 |---|---|
 | Klick auf „Ausblenden“ | Das Script lädt die Anzeigenseite, wie beim normalen Öffnen, und liest den Anbieter aus: bei privaten Anbietern aus dem Link zur Bestandsliste (`/s-bestandsliste.html?userId=…`), bei gewerblichen aus dem Link zur Shop-Seite (`/pro/<shop>`). |
-| „Anbieter blockieren“ | Bestandsliste bzw. Shop-Seite des Anbieters wird einmal geladen (höchstens 5 Seiten). Alle dort gelisteten Anzeigen kommen in den Index und werden sofort ausgeblendet. |
+| „Anbieter blockieren“ | Bestandsliste bzw. Shop-Seite des Anbieters wird einmal geladen, bei mehreren Seiten über den „Weiter“-Link bzw. die Seitenzahlen (höchstens 10 Seiten). Alle dort gelisteten Anzeigen kommen in den Index und werden sofort ausgeblendet. |
 | Neue Anzeigen eines blockierten Anbieters | Bestandslisten und Shop-Seiten blockierter Anbieter werden höchstens einmal am Tag neu geladen, pro Seitenaufruf für höchstens 3 Anbieter. Das lässt sich in der Verwaltung abschalten. |
 | Anzeige oder Bestandsliste öffnen | Die Zuordnung wird nebenbei gelernt, ohne zusätzliche Anfrage. |
 | Optional: „Unbekannte Anzeigen im Hintergrund prüfen“ | Standardmäßig **aus**. Wenn eingeschaltet, lädt das Script bis zu 30 Anzeigenseiten pro Seitenaufruf nacheinander (mit Pause), um auch Anzeigen zu erkennen, die in keiner geladenen Bestandsliste standen. |
@@ -203,6 +203,7 @@ Bitte **keine** Cookies, Tokens oder persönlichen Daten mitschicken.
 
 | Version | Änderungen |
 |---|---|
+| **0.3.1** | Mehrseitige Bestandslisten und Shop-Seiten werden vollständig eingelesen: „Weiter“-Link auch als reines Symbol (`title`, Klasse `…next…`), Rückfall über Seitenzahlen (`pageNum`, `/seite:N`), bis zu 10 Seiten. Vorher wurde oft nur die erste Seite gelesen, sodass bei Anbietern mit vielen Anzeigen ein Teil sichtbar blieb. Kein doppeltes Einlesen direkt nach dem Blockieren |
 | **0.3.0** | Listen abonnieren: Adresse eintragen, tägliche Aktualisierung mit Abgleich, Ausnahmen beim Freigeben, Abo entfernen; Einträge aus Abos werden nicht exportiert. Neue Berechtigung `GM_xmlhttpRequest` |
 | **0.2.0** | Listen zusammenführen: Vorschau mit Auswahl der neuen Anbieter, Herkunft je Eintrag, „Übernommene Listen“ mit „Alle freigeben“; Doppelte in einer Liste werden nur einmal übernommen |
 | **0.1.5** | Aufgeräumt: Kommentare, Texte (Bestandsliste bzw. Shop-Seite), Hilfsfunktionen; Verhalten unverändert |
