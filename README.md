@@ -6,7 +6,7 @@
 
 **Eine eigene Blockliste für Kleinanzeigen.de: Anzeigen von Anbietern, die du blockierst, verschwinden aus deinen Suchergebnissen.**
 
-[![Version](https://img.shields.io/badge/version-0.1.1-blue?style=flat-square)](https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js)
+[![Version](https://img.shields.io/badge/version-0.1.2-blue?style=flat-square)](https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js)
 [![Plattform](https://img.shields.io/badge/plattform-Kleinanzeigen.de-green?style=flat-square)](https://www.kleinanzeigen.de)
 [![Userscript](https://img.shields.io/badge/Tampermonkey-Violentmonkey-black?style=flat-square&logo=tampermonkey)](#%EF%B8%8F-installation)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
@@ -39,7 +39,7 @@ Manche Anbieter tauchen in jeder Suche wieder auf: mit Lockpreisen wie **„2 �
 * 🚫 **Anbieter blockieren:** Ein Klick auf „Ausblenden“ neben dem Preis öffnet ein kleines Menü. Das Script ermittelt den Anbieter, du gibst ihm optional einen Namen und eine Notiz, fertig.
 * 🙈 **Einzelne Anzeigen ausblenden:** Wenn dich nur eine Anzeige stört und nicht der ganze Anbieter.
 * 📋 **Einklappen oder ganz ausblenden:** Standardmäßig bleibt eine schmale Hinweiszeile mit „Kurz zeigen“ und „Freigeben“ stehen. Wer will, lässt die Anzeigen ganz verschwinden.
-* 🔎 **Auch auf der Anzeigenseite:** Am Anbieter steht ein Button „Blockieren“. Bei blockierten Anbietern erscheint unten ein Hinweis.
+* 🔎 **Auch auf der Anzeigenseite:** Am Anbieter-Namen und unten links steht ein Button „Blockieren“. Bei blockierten Anbietern erscheint unten ein Hinweis.
 * 📒 **Verwaltung:** Über den Button „Blockliste“ unten links (oder das Tampermonkey-Menü) siehst du alle blockierten Anbieter mit Notiz, Datum und Zahl der bekannten Anzeigen. Du kannst auch eine Nutzer-ID oder einen Link zur Bestandsliste direkt eintragen.
 * 💾 **Export und Import:** als JSON-Datei, als Textliste oder über die Zwischenablage. Beim Import wird ergänzt, auf Wunsch ersetzt.
 * 🔄 **Mehrere Tabs:** Änderungen gelten sofort auch in anderen offenen Kleinanzeigen-Tabs.
@@ -163,6 +163,7 @@ Bitte **keine** Cookies, Tokens oder persönlichen Daten mitschicken.
 
 | Version | Änderungen |
 |---|---|
+| **0.1.2** | Anzeigenseite: zusätzlich ein fester Button „Anbieter blockieren“ unten links, der auch dann bleibt, wenn die Seite den Anbieter-Kasten neu aufbaut. Styles, Buttons und Hinweise werden wieder eingesetzt, auch wenn die Seite größere Teile des Dokuments austauscht |
 | **0.1.1** | Button auf der Anzeigenseite verschwand kurz nach dem Laden: Wird der Anbieter-Kasten von der Seite neu aufgebaut, setzt das Script den Button wieder ein. Ebenso für Buttons und Hinweiszeilen in den Suchergebnissen |
 | **0.1.0** | Erste Version: Anbieter blockieren, einzelne Anzeigen ausblenden, Einklappen oder ganz Ausblenden, Verwaltung mit Notizen, Export und Import (JSON und Textliste), Anzeigen-Index mit täglicher Aktualisierung der Bestandslisten |
 

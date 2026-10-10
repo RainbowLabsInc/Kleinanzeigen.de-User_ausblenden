@@ -5,7 +5,7 @@
 // @author        RainbowlabsInc
 // @copyright     2026, RainbowlabsInc
 // @license       MIT
-// @version       0.1.1
+// @version       0.1.2
 // @icon          https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/assets/icon48.png
 // @homepage      https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden
 // @updateURL     https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js
@@ -52,7 +52,7 @@
 (function () {
     'use strict';
 
-    const VERSION = '0.1.1';
+    const VERSION = '0.1.2';
 
     const CONFIG = {
         keys: {
@@ -483,9 +483,26 @@
 
     const blockSvg = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg>`;
 
+    const styleEl = document.createElement('style');
+
+    // Die Seite baut Teile des Dokuments nach dem Laden neu auf; dann die Styles erneut einhängen
+    function ensureStyles() {
+        if (!styleEl.isConnected) (document.head || document.documentElement).appendChild(styleEl);
+    }
+
+    // Ruft fn gebündelt (einmal pro Frame) auf, sobald sich das Dokument ändert.
+    // Beobachtet <html> statt <body>, falls die Seite den <body> selbst austauscht.
+    function watchPage(fn) {
+        let scheduled = false;
+        new MutationObserver(() => {
+            if (scheduled) return;
+            scheduled = true;
+            requestAnimationFrame(() => { scheduled = false; fn(); });
+        }).observe(document.documentElement, { childList: true, subtree: true });
+    }
+
     function injectStyles() {
-        const style = document.createElement('style');
-        style.textContent = `
+        styleEl.textContent = `
             [data-kua-hidden] { display: none !important; }
             [data-kua-state="collapsed"] > :not(.kua-note-bar) { display: none !important; }
             [data-kua-state="collapsed"] { min-height: 0 !important; height: auto !important; }
@@ -604,7 +621,7 @@
             .kua-user-main a { font-weight: 600; color: inherit; overflow-wrap: anywhere; }
             .kua-user .kua-input { padding: 4px 8px; font-size: 13px; }
         `;
-        document.head.appendChild(style);
+        ensureStyles();
     }
 
     // ------------------------------------------------------------------
@@ -930,10 +947,8 @@
     let pill = null;
 
     function updatePill(hiddenCount) {
-        if (!pill) {
-            pill = el('button', { type: 'button', className: 'kua-ui kua-pill', onclick: () => openPanel() });
-            document.body.appendChild(pill);
-        }
+        if (!pill) pill = el('button', { type: 'button', className: 'kua-ui kua-pill', onclick: () => openPanel() });
+        if (!pill.isConnected) document.body.appendChild(pill);
         const text = hiddenCount ? `${hiddenCount} ausgeblendet` : 'Blockliste';
         if (pill.dataset.text !== text) {
             pill.dataset.text = text;
@@ -966,6 +981,7 @@
     }
 
     function applyOverview() {
+        ensureStyles();
         let hiddenCount = 0;
         for (const card of findAdCards()) {
             const res = applyCard(card);
@@ -1006,15 +1022,8 @@
         if (pageSellerId) mainListAdIds(document).forEach(adId => learn(adId, pageSellerId));
 
         refreshPage = () => { closeStalePopover(); applyOverview(); };
-
-        let scheduled = false;
-        const schedule = () => {
-            if (scheduled) return;
-            scheduled = true;
-            requestAnimationFrame(() => { scheduled = false; applyOverview(); });
-        };
         applyOverview();
-        new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
+        watchPage(applyOverview);
 
         setTimeout(() => refreshBlockedSellers(), 3000);
     }
@@ -1037,8 +1046,8 @@
             clearTimeout(timer);
             setupDetail();
         });
-        obs.observe(document.body, { childList: true, subtree: true });
-        const timer = setTimeout(() => obs.disconnect(), 10000);
+        obs.observe(document.documentElement, { childList: true, subtree: true });
+        const timer = setTimeout(() => obs.disconnect(), 15000);
     }
 
     function setupDetail() {
@@ -1055,38 +1064,51 @@
             userId: seller.id, sellerName: seller.name,
         };
 
+        // Zwei Bedienelemente: ein Button am Anbieter-Namen und ein fester Button unten links.
+        // Der feste Button hängt direkt am <body> und funktioniert auch dann, wenn die Seite
+        // den Anbieter-Kasten neu aufbaut und den Button dort wieder entfernt.
         const btn = guardedButton({ className: 'kua-ui kua-btn', style: 'margin-left:8px;vertical-align:middle',
             onclick: () => openPopover(info, btn) });
-        seller.el.insertAdjacentElement('afterend', btn);
+        const fab = el('button', { type: 'button', className: 'kua-ui kua-pill', onclick: () => openPopover(info, fab) });
+        let barClosed = false;
+        let reinserts = 0;
 
-        // Kleinanzeigen baut den Anbieter-Kasten nach dem Laden teils neu auf und
-        // entfernt dabei den Button. Dann wird er wieder am (neuen) Anbieter-Link eingesetzt.
-        let scheduled = false;
-        new MutationObserver(() => {
-            if (scheduled || btn.isConnected) return;
-            scheduled = true;
-            requestAnimationFrame(() => {
-                scheduled = false;
-                if (btn.isConnected) return;
-                const again = findSeller(document);
-                if (again && again.id === seller.id) again.el.insertAdjacentElement('afterend', btn);
-            });
-        }).observe(document.body, { childList: true, subtree: true });
-
-        refreshPage = () => {
-            closeStalePopover();
+        const paint = () => {
             const blocked = state.users[seller.id];
+            const label = blocked ? 'Blockiert' : 'Blockieren';
             btn.dataset.state = blocked ? 'blocked' : 'idle';
-            btn.innerHTML = `${blockSvg}<span>${blocked ? 'Blockiert' : 'Blockieren'}</span>`;
+            btn.innerHTML = `${blockSvg}<span>${label}</span>`;
             btn.title = blocked ? 'Du hast diesen Anbieter blockiert' : 'Diesen Anbieter blockieren';
-            setBar(blocked ? [
+            fab.innerHTML = blockSvg;
+            fab.append(el('span', {}, blocked ? 'Anbieter blockiert' : 'Anbieter blockieren'));
+            fab.title = btn.title;
+            setBar(blocked && !barClosed ? [
                 el('span', { className: 'kua-toast-text' }, `Diese Anzeige stammt von „${userLabel(seller.id, seller.name)}“, den du blockiert hast.`),
                 el('button', { type: 'button', onclick: () => unblockUser(seller.id) }, 'Freigeben'),
                 el('button', { type: 'button', onclick: () => openPanel() }, 'Blockliste'),
-                el('button', { type: 'button', 'aria-label': 'Hinweis schließen', onclick: () => setBar(null) }, '×'),
+                el('button', { type: 'button', 'aria-label': 'Hinweis schließen', onclick: () => { barClosed = true; setBar(null); } }, '×'),
             ] : null);
         };
+
+        // Fehlt etwas (Styles, Buttons, Leiste), wieder einsetzen. Entfernt die Seite den Button
+        // am Namen immer wieder, wird es nach 20 Versuchen dort aufgegeben (der feste Button bleibt).
+        const ensure = () => {
+            ensureStyles();
+            if (!fab.isConnected) document.body.appendChild(fab);
+            if (!btn.isConnected && reinserts < 20) {
+                const again = findSeller(document);
+                if (again && again.id === seller.id) {
+                    again.el.insertAdjacentElement('afterend', btn);
+                    reinserts++;
+                }
+            }
+            if (state.users[seller.id] && !barClosed && !document.querySelector('.kua-bar')) paint();
+        };
+
+        seller.el.insertAdjacentElement('afterend', btn);
+        refreshPage = () => { closeStalePopover(); paint(); ensure(); };
         refreshPage();
+        watchPage(ensure);
     }
 
     // ------------------------------------------------------------------
