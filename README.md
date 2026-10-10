@@ -146,9 +146,10 @@ Beide Formate sind schlichte Textdateien. Eine gemeinsame Liste kann also späte
 | Browser | Erweiterung | Stand |
 |---|---|---|
 | Chromium | (Testumgebung mit nachgebauten Seiten) | ✅ Blockieren, Einklappen, Ganz ausblenden, Kurz zeigen, Freigeben, einzelne Anzeigen, Shops (`/pro/`), Anzeigenseite, Bestandsliste, Export und Import (Text, JSON, Ersetzen, fehlerhafte Dateien), Speicher über `GM_setValue` und `localStorage` |
-| Firefox / Chrome / Edge | Tampermonkey / Violentmonkey | ⏳ **noch nicht auf der Live-Seite getestet** |
+| Live-Seite | Tampermonkey | ✅ Suchergebnisse: Button „Ausblenden“ neben dem Preis (auch zusammen mit „Anzeige melden“), Anzeige eines blockierten Anbieters eingeklappt. Anzeigenseite eines gewerblichen Anbieters: Anbieter über `/pro/<Shop>` erkannt, beide Buttons bleiben stehen, Shop-Seite lässt sich einlesen |
+| Live-Seite | Tampermonkey | ⏳ Bestandsliste privater Anbieter einlesen, Shops mit vielen Anzeigen, Violentmonkey |
 
-> **Wichtig für Version 0.1.0:** Das Script wurde bisher nur an nachgebauten Seiten getestet. Wo genau Kleinanzeigen den Anbieter-Link auf der Anzeigenseite und die Ergebnisliste auf der Bestandsliste ablegt, ist aus dem echten HTML noch nicht bestätigt. Die Erkennung ist bewusst breit angelegt (erst feste Bereiche wie `#viewad-contact`, dann der einzige Link zu einer Bestandsliste auf der Seite). Wenn ein Anbieter nicht erkannt wird, hilft ein Issue.
+> **Stand 0.1.4:** Gewerbliche Anbieter stehen auf der Anzeigenseite im Kasten `#viewad-bizteaser` und verlinken nur auf `/pro/<Shop>` (nicht auf eine Bestandsliste). Ob die Bestandsliste privater Anbieter genauso eingelesen werden kann, ist auf der Live-Seite noch nicht bestätigt. Wenn ein Anbieter nicht erkannt wird oder nach dem Blockieren „0 bekannte Anzeigen“ in der Verwaltung steht, hilft ein Issue.
 
 Funktioniert etwas nicht, hilft ein [Issue](https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/issues) mit:
 
