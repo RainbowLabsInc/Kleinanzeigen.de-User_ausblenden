@@ -6,7 +6,7 @@
 
 **Eine eigene Blockliste für Kleinanzeigen.de: Anzeigen von Anbietern, die du blockierst, verschwinden aus deinen Suchergebnissen.**
 
-[![Version](https://img.shields.io/badge/version-0.3.1-blue?style=flat-square)](https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js)
+[![Version](https://img.shields.io/badge/version-0.3.2-blue?style=flat-square)](https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js)
 [![Plattform](https://img.shields.io/badge/plattform-Kleinanzeigen.de-green?style=flat-square)](https://www.kleinanzeigen.de)
 [![Userscript](https://img.shields.io/badge/Tampermonkey-Violentmonkey-black?style=flat-square&logo=tampermonkey)](#%EF%B8%8F-installation)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
@@ -47,7 +47,7 @@ Manche Anbieter tauchen in jeder Suche wieder auf: mit Lockpreisen wie **„2 �
 * 🔀 **Listen zusammenführen:** Eine fremde (oder eigene) Liste als Datei wählen oder einfügen. Eine Vorschau zeigt, welche Anbieter neu sind und welche du schon hast; einzelne lassen sich abwählen. Übernommene Einträge merken sich ihre **Herkunft**, und mit „Alle freigeben“ entfernst du eine übernommene Liste wieder, ohne deine eigenen Einträge anzutasten.
 * 📡 **Listen abonnieren:** Eine Liste unter einer festen Adresse (z. B. eine Datei in einem GitHub-Repo) wird einmal täglich neu geladen. Neue Anbieter kommen dazu, entfernte fallen weg. Gibst du einen Anbieter aus einem Abo frei, bleibt er freigegeben.
 * 🔄 **Mehrere Tabs:** Änderungen gelten sofort auch in anderen offenen Kleinanzeigen-Tabs.
-* 🔒 **Strikt begrenzt:** läuft nur auf `https://www.kleinanzeigen.de` und dort nur auf Seiten unter `/s-…` (Suche, Anzeigen, Bestandslisten).
+* 🔒 **Strikt begrenzt:** läuft nur auf `https://www.kleinanzeigen.de` und dort nur auf der Startseite und auf Seiten unter `/s-…` (Suche, Anzeigen, Bestandslisten).
 
 <p align="center">
   <img src="assets/vorschau-verwaltung.png" alt="Verwaltung der Blockliste mit Anbieterliste, Darstellung, Erkennung sowie Export und Import" width="480">
@@ -205,6 +205,7 @@ Bitte **keine** Cookies, Tokens oder persönlichen Daten mitschicken.
 
 | Version | Änderungen |
 |---|---|
+| **0.3.2** | Auch auf der Startseite: Anzeigen blockierter Anbieter und einzeln ausgeblendete Anzeigen werden dort ebenfalls ausgeblendet, „Ausblenden“-Button an den Anzeigen. Tampermonkey zeigt beim Update die zusätzliche Adresse an |
 | **0.3.1** | Mehrseitige Bestandslisten und Shop-Seiten werden vollständig eingelesen: „Weiter“-Link auch als reines Symbol (`title`, Klasse `…next…`), Rückfall über Seitenzahlen (`pageNum`, `/seite:N`), bis zu 10 Seiten. Vorher wurde oft nur die erste Seite gelesen, sodass bei Anbietern mit vielen Anzeigen ein Teil sichtbar blieb. Kein doppeltes Einlesen direkt nach dem Blockieren |
 | **0.3.0** | Listen abonnieren: Adresse eintragen, tägliche Aktualisierung mit Abgleich, Ausnahmen beim Freigeben, Abo entfernen; Einträge aus Abos werden nicht exportiert. Neue Berechtigung `GM_xmlhttpRequest` |
 | **0.2.0** | Listen zusammenführen: Vorschau mit Auswahl der neuen Anbieter, Herkunft je Eintrag, „Übernommene Listen“ mit „Alle freigeben“; Doppelte in einer Liste werden nur einmal übernommen |
@@ -232,7 +233,7 @@ Bitte **keine** Cookies, Tokens oder persönlichen Daten mitschicken.
 * Es liest keine Passwörter oder Nachrichten aus und sendet keine Daten an fremde Server. Nur wenn du eine Liste abonnierst, lädt es diese Datei von der angegebenen Adresse (ohne Cookies und ohne Daten von dir); der Server der Liste sieht dabei wie bei jedem Abruf deine IP-Adresse.
 * An Kleinanzeigen stellt es nur lesende Anfragen, wie beim normalen Öffnen einer Seite: die Anzeigenseite beim Klick auf „Ausblenden“ und die Bestandslisten bzw. Shop-Seiten blockierter Anbieter (siehe [Wie es technisch funktioniert](#-wie-es-technisch-funktioniert)).
 * Blockliste, Notizen und Anzeigen-Index liegen nur lokal im Speicher deines Userscript-Managers bzw. Browsers.
-* Es läuft **ausschließlich auf `https://www.kleinanzeigen.de`**, und dort nur auf Seiten unter `/s-…`. Auf allen anderen Websites ist es inaktiv.
+* Es läuft **ausschließlich auf `https://www.kleinanzeigen.de`**, und dort nur auf der Startseite und auf Seiten unter `/s-…`. Auf allen anderen Websites ist es inaktiv.
 * Aufbau und Teile des Codes (Erkennung der Anzeigen-Karten und der Preiszeile) stammen aus [Kleinanzeigen – Anzeige melden](https://github.com/RainbowLabsInc/Kleinanzeigen.de_Anzeige_melden).
 
 ---
