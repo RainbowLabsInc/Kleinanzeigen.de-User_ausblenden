@@ -6,7 +6,7 @@
 
 **Eine eigene Blockliste für Kleinanzeigen.de: Anzeigen von Anbietern, die du blockierst, verschwinden aus deinen Suchergebnissen.**
 
-[![Version](https://img.shields.io/badge/version-0.3.4-blue?style=flat-square)](https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js)
+[![Version](https://img.shields.io/badge/version-0.3.5-blue?style=flat-square)](https://github.com/RainbowLabsInc/Kleinanzeigen.de-User_ausblenden/raw/main/script.user.js)
 [![Plattform](https://img.shields.io/badge/plattform-Kleinanzeigen.de-green?style=flat-square)](https://www.kleinanzeigen.de)
 [![Userscript](https://img.shields.io/badge/Tampermonkey-Violentmonkey-black?style=flat-square&logo=tampermonkey)](#%EF%B8%8F-installation)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
@@ -205,6 +205,7 @@ Bitte **keine** Cookies, Tokens oder persönlichen Daten mitschicken.
 
 | Version | Änderungen |
 |---|---|
+| **0.3.5** | Fehlerbehebungen: In der Vorschau beim Zusammenführen stand „null“ (z. B. bei Listen ohne einzelne Anzeigen). „Alle freigeben“ bei einer übernommenen Liste entfernte auch Einträge eines Abos mit gleichem Namen, „Meine Liste ersetzen“ löschte alle Abo-Einträge bis zum nächsten Abgleich. Ein JSON-Import mit Feld `sub` erzeugte unsichtbare Einträge; solche Einträge erscheinen jetzt wieder in der Liste. Liefert die Adresse eines Abos eine HTML-Seite statt einer Liste (z. B. Anmelde- oder Fehlerseite), bleibt das Abo unverändert und zeigt einen Fehler, statt alle Anbieter daraus zu entfernen. In der Verwaltung hinzugefügte Anbieter zeigen nach dem Einlesen die Zahl der bekannten Anzeigen |
 | **0.3.4** | Auch an Anzeigen mit „VB“ ohne Betrag oder ganz ohne Preisangabe (z. B. „Zu verschenken“ auf der Startseite): ohne Preiszeile kommt der Button in eine eigene Zeile unter dem Titel, die sich „Anzeige melden“ und diese Blockliste teilen |
 | **0.3.3** | Zusammen mit „Anzeige melden“: Der Melden-Button in der Preiszeile wird übergangen, beide Scripts finden dieselbe Zeile, keiner verdrängt den anderen (vorher fehlte auf der Startseite je nach Reihenfolge ein Button). Anzeigenseite: „Blockieren“-Button kompakt und rot abgesetzt, hinter dem Namen statt hinter dem Profilbild |
 | **0.3.2** | Auch auf der Startseite: Anzeigen blockierter Anbieter und einzeln ausgeblendete Anzeigen werden dort ebenfalls ausgeblendet, „Ausblenden“-Button an den Anzeigen. Tampermonkey zeigt beim Update die zusätzliche Adresse an |
